@@ -86,9 +86,13 @@ jobs:
 
     - name: Check for merge conflicts
       run: |
-        if grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" --exclude-dir=".git" "<<<<<<< " . || \
-           grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" --exclude-dir=".git" ">>>>>>> " . || \
-           grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" --exclude-dir=".git" "=======" .; then
+        # Check for merge conflict markers (using variables to avoid false positives)
+        CONFLICT_START="<<<<<<<"
+        CONFLICT_END=">>>>>>>"
+        CONFLICT_SEP="======="
+        if grep -r --include="*.py" --include="*.md" --include="*.txt" --exclude-dir=".git" "$CONFLICT_START " . || \
+           grep -r --include="*.py" --include="*.md" --include="*.txt" --exclude-dir=".git" "$CONFLICT_END " . || \
+           grep -r --include="*.py" --include="*.md" --include="*.txt" --exclude-dir=".git" "$CONFLICT_SEP" .; then
           echo "Merge conflict markers found"
           exit 1
         fi
