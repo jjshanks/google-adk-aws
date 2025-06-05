@@ -228,7 +228,7 @@ class S3ArtifactService(BaseArtifactService):
             }
 
             # Upload to S3 asynchronously
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 self._executor,
                 lambda: self.s3_client.put_object(
                     Bucket=self.bucket_name,
@@ -289,7 +289,7 @@ class S3ArtifactService(BaseArtifactService):
             )
 
             # Download from S3 asynchronously
-            response = await asyncio.get_event_loop().run_in_executor(
+            response = await asyncio.get_running_loop().run_in_executor(
                 self._executor,
                 lambda: self.s3_client.get_object(
                     Bucket=self.bucket_name, Key=object_key
@@ -370,7 +370,7 @@ class S3ArtifactService(BaseArtifactService):
                         filename = key_parts[-2]  # Second to last is filename
                         filenames.add(filename)
 
-        await asyncio.get_event_loop().run_in_executor(self._executor, _list_objects)
+        await asyncio.get_running_loop().run_in_executor(self._executor, _list_objects)
 
     async def delete_artifact(
         self, *, app_name: str, user_id: str, session_id: str, filename: str
@@ -409,7 +409,7 @@ class S3ArtifactService(BaseArtifactService):
                         Bucket=self.bucket_name, Key=object_key
                     )
 
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 self._executor, _delete_versions
             )
 
@@ -463,7 +463,7 @@ class S3ArtifactService(BaseArtifactService):
 
                 return sorted(versions)
 
-            versions = await asyncio.get_event_loop().run_in_executor(
+            versions = await asyncio.get_running_loop().run_in_executor(
                 self._executor, _list_versions
             )
 
