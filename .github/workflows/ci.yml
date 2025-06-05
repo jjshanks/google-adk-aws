@@ -43,7 +43,7 @@ jobs:
     - name: Check trailing whitespace and end-of-file
       run: |
         # Check for trailing whitespace
-        if grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" '[[:space:]]$' .; then
+        if grep -r --exclude-dir='.git' --exclude-dir='.github' --exclude-dir='venv' --exclude-dir='env' --exclude-dir='__pycache__' --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" '[[:space:]]$' .; then
           echo "Found trailing whitespace"
           exit 1
         fi
