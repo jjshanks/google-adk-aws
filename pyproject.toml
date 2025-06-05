@@ -29,23 +29,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-cov>=4.1.0",
-    "moto[s3]>=4.2.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "mypy>=1.5.0",
-    "ruff>=0.1.0",
-    "pre-commit>=3.0",
-]
 test = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "moto[s3]>=4.2.0",
     "python-dotenv>=1.0.0",
+]
+dev = [
+    "google-adk-aws[test]",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "ruff>=0.1.0",
+    "pre-commit>=3.0",
 ]
 docs = [
     "sphinx>=6.0",
@@ -92,7 +89,7 @@ module = ["mcp.*", "google.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "examples/s3-artifact-demo/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
