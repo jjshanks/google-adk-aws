@@ -468,7 +468,7 @@ class S3ArtifactService(BaseArtifactService):
             )
 
             logger.debug(f"Found {len(versions)} versions for artifact {filename}")
-            return _list_versions()
+            return versions
 
         except Exception as e:
             logger.error(f"Failed to list versions for {filename}: {e}")
