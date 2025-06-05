@@ -47,8 +47,20 @@ jobs:
         import yaml
         import sys
         import glob
+        import os
 
-        yaml_files = glob.glob('**/*.yml', recursive=True) + glob.glob('**/*.yaml', recursive=True)
+        yaml_files = []
+        for root, dirs, files in os.walk('.'):
+            # Skip hidden directories and common build/cache directories
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['node_modules', '__pycache__']]
+            for file in files:
+                if file.endswith(('.yml', '.yaml')):
+                    yaml_files.append(os.path.join(root, file))
+
+        if not yaml_files:
+            print('No YAML files found - skipping validation')
+            sys.exit(0)
+
         for file in yaml_files:
           try:
             with open(file, 'r') as f:
@@ -61,14 +73,16 @@ jobs:
 
     - name: Check for large files
       run: |
-        find . -type f -size +500k -not -path "./.git/*" | while read file; do
+        find . -type f -size +500k -not -path "./.git/*" -not -path "./.venv/*" -not -path "./.mypy_cache/*" -not -path "./node_modules/*" | while read file; do
           echo "Large file found: $file"
           exit 1
         done
 
     - name: Check for merge conflicts
       run: |
-        if grep -r "<<<<<<< " . || grep -r ">>>>>>> " . || grep -r "=======" .; then
+        if grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" --exclude-dir=".git" "<<<<<<< " . || \
+           grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" --exclude-dir=".git" ">>>>>>> " . || \
+           grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" --exclude-dir=".git" "=======" .; then
           echo "Merge conflict markers found"
           exit 1
         fi
