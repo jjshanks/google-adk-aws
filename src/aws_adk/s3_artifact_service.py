@@ -176,7 +176,8 @@ class S3ArtifactService(BaseArtifactService):
             S3 object key string
         """
         if self._file_has_user_namespace(filename):
-            return f"{app_name}/{user_id}/user/{filename}/{version}"
+            clean_filename = filename[5:] if filename.startswith("user:") else filename
+            return f"{app_name}/{user_id}/user/{clean_filename}/{version}"
         return f"{app_name}/{user_id}/{session_id}/{filename}/{version}"
 
     async def save_artifact(
