@@ -443,9 +443,9 @@ class S3ArtifactService(BaseArtifactService):
                 # Use empty string for version to get prefix
                 prefix = self._get_object_key(
                     app_name, user_id, session_id, filename, 0
-                )[
-                    :-1
-                ]  # Remove trailing slash
+                ).rsplit("/", 1)[
+                    0
+                ]  # Remove last path segment robustly
 
                 paginator = self.s3_client.get_paginator("list_objects_v2")
                 versions = []
