@@ -50,7 +50,7 @@ test: ## Run all tests (main tests + examples)
 test-unit: ## Run unit tests only
 	python -m pytest tests/unit -v
 
-test-integration: ## Run integration tests only
+test-integration: ## Run integration tests only (if any exist)
 	python -m pytest tests/integration -v
 
 test-examples: ## Run example tests only
