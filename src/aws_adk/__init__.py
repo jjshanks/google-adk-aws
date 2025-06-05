@@ -11,4 +11,4 @@ __version__ = "0.1.0"
 __author__ = "Joshua Shanks"
 __email__ = "jjshanks@gmail.com"
 
-__all__ = ["S3ArtifactService"]
+__all__ = ["S3ArtifactService", "__version__"]
