@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Check trailing whitespace and end-of-file
+      run: |
+        # Check for trailing whitespace
+        if grep -r --include="*.py" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.txt" '[[:space:]]$' .; then
+          echo "Found trailing whitespace"
+          exit 1
+        fi
+        # Check files end with newline
+        find . -name "*.py" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" | while read file; do
+          if [ -s "$file" ] && [ "$(tail -c1 "$file" | wc -l)" -eq 0 ]; then
+            echo "File $file does not end with newline"
+            exit 1
+          fi
+        done
+
+    - name: Check YAML files
+      run: |
+        python -c "
+        import yaml
+        import sys
+        import glob
+
+        yaml_files = glob.glob('**/*.yml', recursive=True) + glob.glob('**/*.yaml', recursive=True)
+        for file in yaml_files:
+          try:
+            with open(file, 'r') as f:
+              yaml.safe_load(f)
+            print(f'✓ {file}')
+          except yaml.YAMLError as e:
+            print(f'✗ {file}: {e}')
+            sys.exit(1)
+        "
+
+    - name: Check for large files
+      run: |
+        find . -type f -size +500k -not -path "./.git/*" | while read file; do
+          echo "Large file found: $file"
+          exit 1
+        done
+
+    - name: Check for merge conflicts
+      run: |
+        if grep -r "<<<<<<< " . || grep -r ">>>>>>> " . || grep -r "=======" .; then
+          echo "Merge conflict markers found"
+          exit 1
+        fi
+
+    - name: Run Black (code formatting)
+      run: black --check --diff .
+
+    - name: Run isort (import sorting)
+      run: isort --check-only --diff .
+
+    - name: Run flake8 (linting)
+      run: flake8 --max-line-length=88 --extend-ignore=E203 .
+
+    - name: Run mypy (type checking)
+      run: mypy --ignore-missing-imports --show-error-codes --no-error-summary --exclude examples/ .
+
+    - name: Run tests
+      run: pytest
