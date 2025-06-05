@@ -115,8 +115,10 @@ class S3ArtifactService(BaseArtifactService):
 
             return session.client("s3", **client_config)
 
-        except Exception as e:
+        except botocore.exceptions.ClientError as e:
             raise S3ConnectionError(f"Failed to create S3 client: {e}") from e
+        except Exception as e:
+            raise S3ConnectionError(f"Unexpected error creating S3 client: {e}") from e
 
     def _verify_bucket_access(self) -> None:
         """Verify that the bucket exists and is accessible.
