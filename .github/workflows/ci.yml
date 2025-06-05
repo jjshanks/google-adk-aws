@@ -48,7 +48,7 @@ jobs:
           exit 1
         fi
         # Check files end with newline
-        find . -name "*.py" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" | while read file; do
+        find . \( -name "*.py" -o -name "*.yml" -o -name "*.yaml" -o -name "*.md" -o -name "*.txt" \) -not -path './.git/*' | while read file; do
           if [ -s "$file" ] && [ "$(tail -c1 "$file" | wc -l)" -eq 0 ]; then
             echo "File $file does not end with newline"
             exit 1
