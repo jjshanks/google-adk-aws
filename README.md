@@ -14,12 +14,16 @@ AWS service integrations for Google Agent Development Kit (ADK).
 
 ## Features
 
-### **S3 Artifact Service**
+### **S3 Artifact Service** (Production Ready)
 - **Full BaseArtifactService Implementation**: Complete compatibility with ADK's artifact interface
-- **AWS S3 Integration**: Production-ready S3 storage with proper authentication
+- **Enterprise-Grade Reliability**: Advanced error handling, retry logic, and circuit breakers
+- **Performance Optimized**: Connection pooling, batch operations, and multipart uploads
+- **Security Hardened**: Client-side encryption, integrity verification, and presigned URLs
+- **AWS S3 Integration**: Production-ready S3 storage with comprehensive authentication
 - **Flexible Authentication**: Support for IAM roles, access keys, and custom endpoints
 - **Version Management**: Automatic artifact versioning with history tracking
 - **User Namespace Support**: Session-scoped and user-scoped artifact storage
+- **Monitoring & Diagnostics**: Security assessments, performance metrics, and connection stats
 
 ### **Future AWS Integrations** (Planned)
 - DynamoDB for session state storage
@@ -38,13 +42,15 @@ pip install google-adk-aws
 ### Basic Usage
 
 ```python
-from aws_adk import S3ArtifactService
+from aws_adk import S3ArtifactService, RetryConfig
 from google.adk.agents import Agent
 
-# Create S3 artifact service
+# Create S3 artifact service with enhanced features
 artifact_service = S3ArtifactService(
     bucket_name="my-artifacts-bucket",
-    region_name="us-west-2"
+    region_name="us-west-2",
+    enable_encryption=True,  # Enable client-side encryption
+    retry_config=RetryConfig(max_attempts=5, base_delay=1.0)
 )
 
 # Use with ADK agent
@@ -55,21 +61,69 @@ agent = Agent(
 )
 ```
 
+### Advanced Features
+
+```python
+from aws_adk import S3ArtifactService, S3ArtifactError
+
+# Production configuration
+service = S3ArtifactService(
+    bucket_name="production-artifacts",
+    enable_encryption=True,
+    encryption_key="your-encryption-key"  # Optional custom key
+)
+
+# Security monitoring
+security_status = await service.get_security_status()
+print(f"Encryption enabled: {security_status['encryption']}")
+
+# Performance monitoring
+stats = service.get_connection_stats()
+print(f"Active connections: {stats['active_connections']}")
+
+# Batch operations for efficiency
+await service.batch_delete_artifacts(
+    app_name="app", user_id="user", session_id="session",
+    filenames=["file1.txt", "file2.txt", "file3.txt"]
+)
+
+# Secure temporary access
+presigned_url = await service.generate_presigned_url(
+    app_name="app", user_id="user", session_id="session",
+    filename="document.pdf", expiration=3600
+)
+```
+
 ## Examples
 
-### S3 Artifact Service Demo
+### S3 Artifact Service Demos
 
-A complete example demonstrating S3 artifact operations with Google ADK is available in [`examples/s3-artifact-demo/`](examples/s3-artifact-demo/):
+Multiple comprehensive examples demonstrate the full capabilities:
+
+#### Basic S3 Operations Demo
+Available in [`examples/s3-artifact-demo/`](examples/s3-artifact-demo/):
 
 - **Standalone Demo**: [`demo.py`](examples/s3-artifact-demo/s3_artifact_demo/demo.py) - Shows basic S3 operations
 - **Agent Integration**: [`agent.py`](examples/s3-artifact-demo/s3_artifact_demo/agent.py) - ADK agent with S3 tools
 - **Interactive Mode**: Run `python demo.py --interactive` for hands-on testing
 
+#### Phase 2 Enhanced Features Demo
+Available at [`examples/phase2_features_demo.py`](examples/phase2_features_demo.py):
+
+- **Security Features**: Encryption, integrity verification, presigned URLs
+- **Performance Features**: Connection pooling, batch operations, large file handling
+- **Monitoring**: Security assessments and performance metrics
+- **Error Handling**: Retry logic and circuit breaker demonstrations
+
 Features demonstrated:
-- Basic save/load/delete operations
+- Basic save/load/delete operations with enhanced reliability
 - Automatic versioning and version management
 - User-scoped vs session-scoped artifacts
-- Error handling and best practices
+- Client-side encryption for sensitive data
+- Batch operations for improved efficiency
+- Security monitoring and recommendations
+- Performance optimization features
+- Comprehensive error handling and recovery
 - Agent tool integration patterns
 
 ## Development
@@ -111,11 +165,14 @@ make help
 - [x] AWS S3 authentication and storage
 - [x] Basic verification tests
 
-🚧 **Phase 2 - Enhanced S3 Features** (Next)
-- [ ] Comprehensive error handling
-- [ ] Advanced testing with moto
-- [ ] Performance optimizations
-- [ ] Integration tests
+✅ **Phase 2 - Enhanced S3 Features** (Complete)
+- [x] Advanced error handling with retry logic and circuit breakers
+- [x] Comprehensive testing framework with moto S3 mocking
+- [x] Performance optimizations (connection pooling, batch operations)
+- [x] Security features (encryption, integrity verification, presigned URLs)
+- [x] Production monitoring and diagnostics
+- [x] Integration tests with real S3 operations
+- [x] Large file support with multipart uploads
 
 🔮 **Future Phases - Additional AWS Services**
 - [ ] DynamoDB integrations

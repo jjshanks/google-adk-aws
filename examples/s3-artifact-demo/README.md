@@ -6,17 +6,27 @@ This example demonstrates how to use the AWS ADK S3ArtifactService with Google A
 
 The S3ArtifactService provides:
 - **Persistent Storage**: Save and retrieve artifacts using Amazon S3
+- **Enterprise-Grade Reliability**: Advanced error handling, retry logic, and circuit breakers
+- **Performance Optimized**: Connection pooling, batch operations, and multipart uploads
+- **Security Hardened**: Client-side encryption, integrity verification, and presigned URLs
 - **Automatic Versioning**: Multiple versions of the same artifact
 - **User Scoping**: Session-scoped vs user-scoped artifacts
 - **Flexible Authentication**: IAM roles, credentials, or S3-compatible services
 
 ## Features Demonstrated
 
-- Basic S3 artifact operations (save, load, list, delete)
+### Basic Operations
+- S3 artifact operations (save, load, list, delete)
 - Version management with automatic incrementation
 - User-scoped artifacts that persist across sessions
 - Agent integration with custom tools
-- Error handling for common S3 scenarios
+
+### Phase 2 Enhanced Features
+- **Advanced Error Handling**: Retry logic with exponential backoff and circuit breakers
+- **Security Features**: Client-side encryption and content integrity verification
+- **Performance Optimization**: Connection pooling and batch operations
+- **Monitoring**: Security assessments and performance metrics
+- **Large File Support**: Multipart uploads for files over 100MB
 
 ## Prerequisites
 
@@ -85,6 +95,13 @@ S3_BUCKET_NAME=your-artifact-bucket
 
 # Optional: For S3-compatible services
 S3_ENDPOINT_URL=https://your-s3-compatible-service.com
+
+# Phase 2 Enhanced Features (Optional)
+S3_ENABLE_ENCRYPTION=true              # Enable client-side encryption
+S3_ENCRYPTION_KEY=your-32-char-key     # Custom encryption key (optional)
+S3_RETRY_MAX_ATTEMPTS=5                # Maximum retry attempts
+S3_RETRY_BASE_DELAY=1.0                # Base delay between retries (seconds)
+S3_RETRY_MAX_DELAY=30.0                # Maximum delay between retries (seconds)
 ```
 
 ### IAM Permissions
@@ -117,16 +134,18 @@ Your AWS credentials need the following S3 permissions:
 ### Basic S3 Operations
 
 ```python
-from aws_adk.s3_artifact_service import S3ArtifactService
+from aws_adk import S3ArtifactService, RetryConfig
 from google.genai import types
 
-# Initialize service
+# Initialize service with enhanced features
 artifact_service = S3ArtifactService(
     bucket_name="my-bucket",
-    region_name="us-east-1"
+    region_name="us-east-1",
+    enable_encryption=True,  # Enable client-side encryption
+    retry_config=RetryConfig(max_attempts=5, base_delay=1.0)
 )
 
-# Save an artifact
+# Save an artifact (automatically encrypted if enabled)
 artifact = types.Part.from_text("Hello, World!")
 version = await artifact_service.save_artifact(
     app_name="my_app",
@@ -136,7 +155,7 @@ version = await artifact_service.save_artifact(
     artifact=artifact
 )
 
-# Load the artifact
+# Load the artifact (automatically decrypted if encrypted)
 loaded = await artifact_service.load_artifact(
     app_name="my_app",
     user_id="user123",
@@ -144,6 +163,38 @@ loaded = await artifact_service.load_artifact(
     filename="greeting.txt"
 )
 print(loaded.text)  # "Hello, World!"
+```
+
+### Enhanced Features Usage
+
+```python
+# Check security status
+security_status = await artifact_service.get_security_status()
+print(f"Encryption enabled: {security_status['encryption']}")
+print(f"Recommendations: {security_status['recommendations']}")
+
+# Generate presigned URL for secure sharing
+presigned_url = await artifact_service.generate_presigned_url(
+    app_name="my_app",
+    user_id="user123",
+    session_id="session456",
+    filename="greeting.txt",
+    expiration=3600  # 1 hour
+)
+
+# Batch delete multiple artifacts
+result = await artifact_service.batch_delete_artifacts(
+    app_name="my_app",
+    user_id="user123",
+    session_id="session456",
+    filenames=["file1.txt", "file2.txt", "file3.txt"]
+)
+print(f"Deleted: {len(result['deleted'])}, Errors: {len(result['errors'])}")
+
+# Monitor connection performance
+stats = artifact_service.get_connection_stats()
+print(f"Active connections: {stats['active_connections']}")
+print(f"Cache hit ratio: {stats['cache_hits'] / (stats['cache_hits'] + stats['cache_misses']):.2%}")
 ```
 
 ### Agent Integration
@@ -173,9 +224,17 @@ agent = create_s3_agent()
 
 ### Error Handling
 
+Phase 2 includes comprehensive error handling with specific exception types:
+
 - `S3ConnectionError`: Network or authentication issues
 - `S3PermissionError`: Insufficient IAM permissions
-- `S3ArtifactError`: General S3 operation failures
+- `S3BucketError`: Bucket-related errors (non-existent, access denied)
+- `S3ThrottleError`: Rate limiting and throttling issues
+- `S3ArtifactNotFoundError`: Requested artifact doesn't exist
+- `S3ObjectError`: General object operation failures
+- `S3ArtifactError`: Base exception for all S3 operations
+
+All operations include automatic retry logic with exponential backoff and circuit breaker protection.
 
 ## Testing
 

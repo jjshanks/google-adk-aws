@@ -156,6 +156,7 @@ build-backend = "poetry.core.masonry.api"
 
 - **google-adk**: Core ADK functionality
 - **google-cloud-aiplatform**: Vertex AI integration with ADK and agent engines
+- **google-adk-aws**: AWS service integrations (S3 artifact storage, etc.)
 - **pydantic**: Data validation and serialization
 
 ### Development Dependencies
@@ -191,6 +192,7 @@ Create your main agent in `my_agent_example/agent.py`:
 import logging
 from google.adk import Agent
 from google.genai.types import GenerateContentConfig
+from aws_adk import S3ArtifactService, RetryConfig
 
 from .prompt import GLOBAL_INSTRUCTION, MAIN_INSTRUCTION
 from .tools.tools import primary_tool, secondary_tool
@@ -200,6 +202,14 @@ from .shared_libraries.callbacks import before_tool_callback, after_tool_callbac
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Configure enhanced S3 artifact service
+artifact_service = S3ArtifactService(
+    bucket_name="my-agent-artifacts",
+    region_name="us-west-2",
+    enable_encryption=True,  # Enable client-side encryption
+    retry_config=RetryConfig(max_attempts=5, base_delay=1.0)
+)
+
 # Agent configuration
 root_agent = Agent(
     model="gemini-2.0-flash-001",
@@ -207,6 +217,7 @@ root_agent = Agent(
     global_instruction=GLOBAL_INSTRUCTION,
     instruction=MAIN_INSTRUCTION,
     tools=[primary_tool, secondary_tool],
+    artifact_service=artifact_service,  # Enhanced S3 artifact storage
     generate_config=GenerateContentConfig(
         temperature=0.1,
         max_output_tokens=8192,

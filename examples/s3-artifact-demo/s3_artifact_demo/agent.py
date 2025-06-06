@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from google.adk import Agent
 from google.genai.types import GenerateContentConfig
 
-from aws_adk.s3_artifact_service import S3ArtifactService
+from aws_adk import RetryConfig, S3ArtifactService
 
 from .prompt import GLOBAL_INSTRUCTION, MAIN_INSTRUCTION
 from .tools.file_tools import (
@@ -44,7 +44,7 @@ def create_s3_artifact_service() -> S3ArtifactService:
     """Create and configure S3ArtifactService from environment variables.
 
     Returns:
-        Configured S3ArtifactService instance
+        Configured S3ArtifactService instance with Phase 2 enhancements
 
     Raises:
         ValueError: If required environment variables are missing
@@ -53,6 +53,9 @@ def create_s3_artifact_service() -> S3ArtifactService:
     if not bucket_name:
         raise ValueError("S3_BUCKET_NAME environment variable is required")
 
+    # Enhanced configuration with Phase 2 features
+    enable_encryption = os.getenv("S3_ENABLE_ENCRYPTION", "false").lower() == "true"
+
     return S3ArtifactService(
         bucket_name=bucket_name,
         region_name=os.getenv("AWS_REGION", "us-east-1"),
@@ -60,6 +63,14 @@ def create_s3_artifact_service() -> S3ArtifactService:
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
         aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
         endpoint_url=os.getenv("S3_ENDPOINT_URL"),
+        # Phase 2 enhancements
+        enable_encryption=enable_encryption,
+        encryption_key=os.getenv("S3_ENCRYPTION_KEY"),
+        retry_config=RetryConfig(
+            max_attempts=int(os.getenv("S3_RETRY_MAX_ATTEMPTS", "5")),
+            base_delay=float(os.getenv("S3_RETRY_BASE_DELAY", "1.0")),
+            max_delay=float(os.getenv("S3_RETRY_MAX_DELAY", "30.0")),
+        ),
     )
 
 

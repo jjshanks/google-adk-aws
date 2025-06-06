@@ -1,46 +1,46 @@
 """S3 Artifact Service implementation for Google ADK."""
 
-import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Optional, cast
 
-import boto3
 import botocore.exceptions
 from google.adk.artifacts import BaseArtifactService
 from google.genai import types
 
+from .batch_operations import MultipartUploadManager, S3BatchOperations
+from .connection_pool import get_connection_pool
+from .exceptions import (
+    S3ArtifactError,
+    S3ArtifactNotFoundError,
+    S3BucketError,
+    S3ConnectionError,
+    S3ObjectError,
+    S3PermissionError,
+    S3ThrottleError,
+)
+from .retry_handler import CircuitBreaker, RetryConfig, is_throttle_error, with_retry
+from .security import AccessControlManager, EncryptionManager, S3SecurityManager
+
 logger = logging.getLogger(__name__)
 
 
-class S3ArtifactError(Exception):
-    """Base exception for S3 artifact operations."""
-
-    pass
-
-
-class S3ConnectionError(S3ArtifactError):
-    """Raised when S3 connection fails."""
-
-    pass
-
-
-class S3PermissionError(S3ArtifactError):
-    """Raised when S3 permissions are insufficient."""
-
-    pass
-
-
 class S3ArtifactService(BaseArtifactService):
-    """S3-based implementation of ADK's BaseArtifactService.
+    """Enhanced S3-based implementation of ADK's BaseArtifactService.
 
     Provides artifact storage and retrieval using Amazon S3 or S3-compatible
-    services. Supports multiple authentication methods and automatic versioning.
+    services. Supports multiple authentication methods, automatic versioning,
+    advanced error handling, performance optimization, and security features.
 
     Attributes:
         bucket_name: S3 bucket name for artifact storage
         region_name: AWS region for S3 operations
         s3_client: Boto3 S3 client instance
+        retry_config: Configuration for retry behavior
+        security_manager: Security features manager
+        access_control: Access control manager
+        batch_operations: Batch operations manager
+        multipart_manager: Multipart upload manager
     """
 
     def __init__(
@@ -51,9 +51,12 @@ class S3ArtifactService(BaseArtifactService):
         aws_secret_access_key: str | None = None,
         aws_session_token: str | None = None,
         endpoint_url: str | None = None,
+        retry_config: Optional[RetryConfig] = None,
+        enable_encryption: bool = False,
+        encryption_key: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize S3ArtifactService.
+        """Initialize Enhanced S3ArtifactService.
 
         Args:
             bucket_name: Name of S3 bucket to use for storage
@@ -62,6 +65,9 @@ class S3ArtifactService(BaseArtifactService):
             aws_secret_access_key: AWS secret access key (optional)
             aws_session_token: AWS session token for temporary credentials (optional)
             endpoint_url: Custom S3 endpoint URL for S3-compatible services (optional)
+            retry_config: Configuration for retry behavior (optional)
+            enable_encryption: Enable client-side encryption (default: False)
+            encryption_key: Custom encryption key (optional, generates if needed)
             **kwargs: Additional arguments passed to boto3.Session
 
         Raises:
@@ -78,10 +84,45 @@ class S3ArtifactService(BaseArtifactService):
         self.aws_session_token = aws_session_token
         self.session_kwargs = kwargs
 
-        # Initialize S3 client
-        self.s3_client = self._create_s3_client()
+        # Initialize retry configuration
+        self.retry_config = retry_config or RetryConfig()
 
-        # Thread pool for async operations
+        # Initialize circuit breakers for different operation types
+        self.read_circuit_breaker = CircuitBreaker(
+            failure_threshold=5, timeout=30.0, expected_exception=S3ConnectionError
+        )
+
+        self.write_circuit_breaker = CircuitBreaker(
+            failure_threshold=3, timeout=60.0, expected_exception=S3ConnectionError
+        )
+
+        # Use connection pool for optimized S3 client
+        self.connection_pool = get_connection_pool()
+        self.s3_client = self.connection_pool.get_client(
+            region_name=self.region_name,
+            aws_access_key_id=self.aws_access_key_id,
+            aws_secret_access_key=self.aws_secret_access_key,
+            aws_session_token=self.aws_session_token,
+            endpoint_url=self.endpoint_url,
+        )
+
+        # Initialize enhanced features
+        self.security_manager = S3SecurityManager(self.s3_client, self.bucket_name)
+        self.access_control = AccessControlManager()
+        self.batch_operations = S3BatchOperations(self.s3_client, self.bucket_name)
+        self.multipart_manager = MultipartUploadManager(
+            self.s3_client, self.bucket_name
+        )
+
+        # Initialize encryption if enabled
+        self.enable_encryption = enable_encryption
+        self.encryption_manager: Optional[EncryptionManager]
+        if enable_encryption:
+            self.encryption_manager = EncryptionManager(encryption_key)
+        else:
+            self.encryption_manager = None
+
+        # Thread pool for async operations (kept for backwards compatibility)
         self._executor = ThreadPoolExecutor(
             max_workers=10, thread_name_prefix="s3-artifact"
         )
@@ -89,36 +130,34 @@ class S3ArtifactService(BaseArtifactService):
         # Verify bucket access
         self._verify_bucket_access()
 
-    def _create_s3_client(self) -> Any:
-        """Create and configure S3 client with authentication.
+    def _handle_s3_error(self, error: Exception, operation: str) -> None:
+        """Enhanced error handling with specific exception mapping."""
+        if isinstance(error, botocore.exceptions.ClientError):
+            error_code = error.response["Error"]["Code"]
+            error_message = error.response["Error"]["Message"]
 
-        Returns:
-            Configured boto3 S3 client
-
-        Raises:
-            S3ConnectionError: If client creation fails
-        """
-        try:
-            # Create session with provided credentials
-            session = boto3.Session(
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
-                aws_session_token=self.aws_session_token,
-                region_name=self.region_name,
-                **self.session_kwargs,
-            )
-
-            # Configure client options
-            client_config: dict[str, str] = {}
-            if self.endpoint_url:
-                client_config["endpoint_url"] = self.endpoint_url
-
-            return session.client("s3", **client_config)
-
-        except botocore.exceptions.ClientError as e:
-            raise S3ConnectionError(f"Failed to create S3 client: {e}") from e
-        except Exception as e:
-            raise S3ConnectionError(f"Unexpected error creating S3 client: {e}") from e
+            if error_code == "NoSuchBucket":
+                raise S3BucketError(
+                    f"Bucket {self.bucket_name} does not exist"
+                ) from error
+            elif error_code in ["AccessDenied", "Forbidden"]:
+                raise S3PermissionError(f"Access denied for {operation}") from error
+            elif error_code == "NoSuchKey":
+                raise S3ArtifactNotFoundError("Artifact not found") from error
+            elif is_throttle_error(error):
+                raise S3ThrottleError(f"S3 throttling during {operation}") from error
+            elif error_code in ["InternalError", "ServiceUnavailable"]:
+                raise S3ConnectionError(
+                    f"S3 service error during {operation}"
+                ) from error
+            else:
+                raise S3ObjectError(
+                    f"S3 {operation} failed: {error_message}"
+                ) from error
+        else:
+            raise S3ArtifactError(
+                f"Unexpected error during {operation}: {error}"
+            ) from error
 
     def _verify_bucket_access(self) -> None:
         """Verify that the bucket exists and is accessible.
@@ -182,6 +221,76 @@ class S3ArtifactService(BaseArtifactService):
             return f"{app_name}/{user_id}/user/{clean_filename}/{version}"
         return f"{app_name}/{user_id}/{session_id}/{filename}/{version}"
 
+    async def _determine_next_version(
+        self, app_name: str, user_id: str, session_id: str, filename: str
+    ) -> int:
+        """Determine the next version number for an artifact."""
+        existing_versions = await self.list_versions(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+            filename=filename,
+        )
+        return 0 if not existing_versions else max(existing_versions) + 1
+
+    def _prepare_artifact_data(self, artifact: types.Part) -> tuple[bytes, str]:
+        """Extract and validate artifact data and content type."""
+        if artifact.inline_data is None:
+            raise S3ArtifactError("Artifact has no inline data")
+        artifact_data = artifact.inline_data.data
+        if artifact_data is None:
+            raise S3ArtifactError("Artifact data is None")
+        content_type = artifact.inline_data.mime_type
+        if content_type is None:
+            raise S3ArtifactError("Artifact content type is None")
+        return artifact_data, content_type
+
+    def _prepare_metadata(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+        version: int,
+        content_hash: str,
+        encryption_metadata: dict[str, str],
+    ) -> dict[str, str]:
+        """Prepare metadata for S3 object."""
+        return {
+            "app-name": app_name,
+            "user-id": user_id,
+            "session-id": session_id,
+            "filename": filename,
+            "version": str(version),
+            "content-hash": content_hash,
+        } | encryption_metadata
+
+    async def _upload_artifact_data(
+        self,
+        object_key: str,
+        artifact_data: bytes,
+        content_type: str,
+        metadata: dict[str, str],
+    ) -> None:
+        """Upload artifact data using appropriate method based on size."""
+        if len(artifact_data) > self.multipart_manager.multipart_threshold:
+            await self.multipart_manager.upload_large_artifact(
+                object_key=object_key,
+                data=artifact_data,
+                content_type=content_type,
+                metadata=metadata,
+            )
+        else:
+            # Regular upload for smaller artifacts
+            await self.connection_pool.execute_async(
+                self.s3_client.put_object,
+                Bucket=self.bucket_name,
+                Key=object_key,
+                Body=artifact_data,
+                ContentType=content_type,
+                Metadata=metadata,
+            )
+
     async def save_artifact(
         self,
         *,
@@ -191,7 +300,7 @@ class S3ArtifactService(BaseArtifactService):
         filename: str,
         artifact: types.Part,
     ) -> int:
-        """Save artifact to S3 storage.
+        """Save artifact to S3 storage with enhanced features.
 
         Args:
             app_name: Application name
@@ -206,48 +315,123 @@ class S3ArtifactService(BaseArtifactService):
         Raises:
             S3ArtifactError: If save operation fails
         """
-        try:
-            # Get existing versions to determine next version
+
+        @self.write_circuit_breaker
+        @with_retry(self.retry_config)  # type: ignore[misc]
+        async def _save_with_protection() -> int:
+            try:
+                # Determine next version
+                version = await self._determine_next_version(
+                    app_name, user_id, session_id, filename
+                )
+
+                # Generate and validate object key
+                object_key = self.security_manager.generate_secure_object_key(
+                    app_name, user_id, session_id, filename, version
+                )
+                if not self.security_manager.validate_object_key(object_key):
+                    raise S3ArtifactError(f"Invalid object key: {object_key}")
+
+                # Prepare artifact data
+                artifact_data, content_type = self._prepare_artifact_data(artifact)
+
+                # Apply encryption if enabled
+                if self.enable_encryption and self.encryption_manager:
+                    (
+                        artifact_data,
+                        encryption_metadata,
+                    ) = self.encryption_manager.encrypt_content(artifact_data)
+                else:
+                    encryption_metadata = {}
+
+                # Calculate content hash for integrity verification
+                content_hash = self.security_manager.calculate_content_hash(
+                    artifact_data
+                )
+
+                # Prepare metadata
+                metadata = self._prepare_metadata(
+                    app_name,
+                    user_id,
+                    session_id,
+                    filename,
+                    version,
+                    content_hash,
+                    encryption_metadata,
+                )
+
+                # Upload artifact data
+                await self._upload_artifact_data(
+                    object_key, artifact_data, content_type, metadata
+                )
+
+                logger.info(
+                    f"Saved artifact {filename} version {version} to {object_key}"
+                )
+                return version
+
+            except Exception as e:
+                logger.error(
+                    f"Save artifact failed - App: {app_name}, User: {user_id}, "
+                    f"Session: {session_id}, File: {filename}, Error: {e}"
+                )
+                self._handle_s3_error(e, "save_artifact")
+                raise  # This should never be reached due to _handle_s3_error raising
+
+        result = await _save_with_protection()
+        return int(result)
+
+    async def _resolve_version_for_load(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+        version: int | None,
+    ) -> int | None:
+        """Resolve the version to load, returning None if no versions exist."""
+        if version is None:
             existing_versions = await self.list_versions(
                 app_name=app_name,
                 user_id=user_id,
                 session_id=session_id,
                 filename=filename,
             )
-            version = 0 if not existing_versions else max(existing_versions) + 1
+            if not existing_versions:
+                return None
+            return max(existing_versions)
+        return version
 
-            # Construct object key
-            object_key = self._get_object_key(
-                app_name, user_id, session_id, filename, version
-            )
+    async def _download_artifact_from_s3(self, object_key: str) -> dict[str, Any]:
+        """Download artifact data from S3."""
+        return cast(
+            dict[str, Any],
+            await self.connection_pool.execute_async(
+                self.s3_client.get_object, Bucket=self.bucket_name, Key=object_key
+            ),
+        )
 
-            # Prepare metadata
-            metadata = {
-                "app-name": app_name,
-                "user-id": user_id,
-                "session-id": session_id,
-                "filename": filename,
-                "version": str(version),
-            }
+    def _process_downloaded_data(
+        self, response: dict[str, Any], filename: str
+    ) -> tuple[bytes, str, dict[str, str]]:
+        """Process downloaded S3 response data."""
+        data = response["Body"].read()
+        content_type = response["ContentType"]
+        metadata = response.get("Metadata", {})
 
-            # Upload to S3 asynchronously
-            await asyncio.get_running_loop().run_in_executor(
-                self._executor,
-                lambda: self.s3_client.put_object(
-                    Bucket=self.bucket_name,
-                    Key=object_key,
-                    Body=artifact.inline_data.data,
-                    ContentType=artifact.inline_data.mime_type,
-                    Metadata=metadata,
-                ),
-            )
+        # Verify content integrity if hash is available
+        stored_hash = metadata.get("content-hash")
+        if stored_hash:
+            if not self.security_manager.verify_content_integrity(data, stored_hash):
+                raise S3ArtifactError(
+                    f"Content integrity verification failed for {filename}"
+                )
 
-            logger.info(f"Saved artifact {filename} version {version} to {object_key}")
-            return version
+        # Apply decryption if needed
+        if self.enable_encryption and self.encryption_manager:
+            data = self.encryption_manager.decrypt_content(data, metadata)
 
-        except Exception as e:
-            logger.error(f"Failed to save artifact {filename}: {e}")
-            raise S3ArtifactError(f"Failed to save artifact: {e}") from e
+        return data, content_type, metadata
 
     async def load_artifact(
         self,
@@ -258,7 +442,7 @@ class S3ArtifactService(BaseArtifactService):
         filename: str,
         version: int | None = None,
     ) -> types.Part | None:
-        """Load artifact from S3 storage.
+        """Load artifact from S3 storage with enhanced features.
 
         Args:
             app_name: Application name
@@ -273,50 +457,48 @@ class S3ArtifactService(BaseArtifactService):
         Raises:
             S3ArtifactError: If load operation fails
         """
-        try:
-            # Determine version if not specified
-            if version is None:
-                existing_versions = await self.list_versions(
-                    app_name=app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                    filename=filename,
+
+        @self.read_circuit_breaker
+        @with_retry(self.retry_config)  # type: ignore[misc]
+        async def _load_with_protection() -> types.Part | None:
+            try:
+                # Resolve version to load
+                actual_version = await self._resolve_version_for_load(
+                    app_name, user_id, session_id, filename, version
                 )
-                if not existing_versions:
+                if actual_version is None:
                     return None
-                version = max(existing_versions)
 
-            # Construct object key
-            object_key = self._get_object_key(
-                app_name, user_id, session_id, filename, version
-            )
+                # Generate object key
+                object_key = self.security_manager.generate_secure_object_key(
+                    app_name, user_id, session_id, filename, actual_version
+                )
 
-            # Download from S3 asynchronously
-            response = await asyncio.get_running_loop().run_in_executor(
-                self._executor,
-                lambda: self.s3_client.get_object(
-                    Bucket=self.bucket_name, Key=object_key
-                ),
-            )
+                # Download from S3
+                response = await self._download_artifact_from_s3(object_key)
 
-            # Read data and create types.Part
-            data = response["Body"].read()
-            content_type = response["ContentType"]
+                # Process downloaded data
+                data, content_type, metadata = self._process_downloaded_data(
+                    response, filename
+                )
 
-            logger.info(
-                f"Loaded artifact {filename} version {version} from {object_key}"
-            )
-            return types.Part.from_bytes(data=data, mime_type=content_type)
+                logger.info(
+                    f"Loaded artifact {filename} version {actual_version} "
+                    f"from {object_key}"
+                )
+                return types.Part.from_bytes(data=data, mime_type=content_type)
 
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchKey":
-                logger.debug(f"Artifact not found: {filename} version {version}")
+            except S3ArtifactNotFoundError:
+                # Not found is not an error condition for load
+                logger.debug(f"Artifact not found: {filename} version {actual_version}")
                 return None
-            logger.error(f"Failed to load artifact {filename}: {e}")
-            raise S3ArtifactError(f"Failed to load artifact: {e}") from e
-        except Exception as e:
-            logger.error(f"Unexpected error loading artifact {filename}: {e}")
-            raise S3ArtifactError(f"Failed to load artifact: {e}") from e
+            except Exception as e:
+                logger.error(f"Failed to load artifact {filename}: {e}")
+                self._handle_s3_error(e, "load_artifact")
+                raise  # This should never be reached due to _handle_s3_error raising
+
+        result = await _load_with_protection()
+        return cast(types.Part | None, result)
 
     async def list_artifact_keys(
         self, *, app_name: str, user_id: str, session_id: str
@@ -373,7 +555,7 @@ class S3ArtifactService(BaseArtifactService):
                         filename = key_parts[-2]  # Second to last is filename
                         filenames.add(filename)
 
-        await asyncio.get_running_loop().run_in_executor(self._executor, _list_objects)
+        await self.connection_pool.execute_async(_list_objects)
 
     async def delete_artifact(
         self, *, app_name: str, user_id: str, session_id: str, filename: str
@@ -412,9 +594,7 @@ class S3ArtifactService(BaseArtifactService):
                         Bucket=self.bucket_name, Key=object_key
                     )
 
-            await asyncio.get_running_loop().run_in_executor(
-                self._executor, _delete_versions
-            )
+            await self.connection_pool.execute_async(_delete_versions)
 
             logger.info(f"Deleted {len(versions)} versions of artifact {filename}")
 
@@ -466,8 +646,8 @@ class S3ArtifactService(BaseArtifactService):
 
                 return sorted(versions)
 
-            versions = await asyncio.get_running_loop().run_in_executor(
-                self._executor, _list_versions
+            versions = cast(
+                list[int], await self.connection_pool.execute_async(_list_versions)
             )
 
             logger.debug(f"Found {len(versions)} versions for artifact {filename}")
@@ -476,6 +656,68 @@ class S3ArtifactService(BaseArtifactService):
         except Exception as e:
             logger.error(f"Failed to list versions for {filename}: {e}")
             raise S3ArtifactError(f"Failed to list versions: {e}") from e
+
+    async def get_security_status(self) -> dict:
+        """Get bucket security status and recommendations."""
+        return self.security_manager.validate_bucket_security()
+
+    async def generate_presigned_url(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+        version: Optional[int] = None,
+        operation: str = "get_object",
+        expiration: int = 3600,
+    ) -> str:
+        """Generate presigned URL for artifact access."""
+        # Determine version if not specified
+        if version is None:
+            existing_versions = await self.list_versions(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                filename=filename,
+            )
+            if not existing_versions:
+                raise S3ArtifactNotFoundError(f"No versions found for {filename}")
+            version = max(existing_versions)
+
+        # Generate secure object key
+        object_key = self.security_manager.generate_secure_object_key(
+            app_name, user_id, session_id, filename, version
+        )
+
+        return self.access_control.generate_presigned_url(
+            self.s3_client, self.bucket_name, object_key, operation, expiration
+        )
+
+    async def batch_delete_artifacts(
+        self, app_name: str, user_id: str, session_id: str, filenames: list[str]
+    ) -> dict:
+        """Delete multiple artifacts using batch operations."""
+        object_keys = []
+
+        for filename in filenames:
+            versions = await self.list_versions(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                filename=filename,
+            )
+
+            for version in versions:
+                object_key = self.security_manager.generate_secure_object_key(
+                    app_name, user_id, session_id, filename, version
+                )
+                object_keys.append(object_key)
+
+        return await self.batch_operations.batch_delete(object_keys)
+
+    def get_connection_stats(self) -> dict:
+        """Get connection pool statistics."""
+        return self.connection_pool.get_stats()
 
     def __del__(self) -> None:
         """Cleanup resources on object destruction."""
