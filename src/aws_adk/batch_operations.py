@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import boto3
 
@@ -143,22 +143,24 @@ class S3BatchOperations:
         if not prefixes:
             return {}
 
-        results = {}
+        results: Dict[str, List[Dict[str, Any]]] = {}
 
         # Create list tasks
+        prefixes_list = []
         tasks = []
         for prefix in prefixes:
             task = self._list_objects_for_prefix(prefix, max_keys_per_prefix)
-            tasks.append((prefix, task))
+            prefixes_list.append(prefix)
+            tasks.append(task)
 
-        # Execute listing operations
-        for prefix, task in tasks:
-            try:
-                objects = await task
-                results[prefix] = objects
-            except Exception as e:
-                logger.error(f"List objects failed for prefix {prefix}: {e}")
+        # Execute listing operations concurrently
+        objects_lists = await asyncio.gather(*tasks, return_exceptions=True)
+        for prefix, objects in zip(prefixes_list, objects_lists):
+            if isinstance(objects, Exception):
+                logger.error(f"List objects failed for prefix {prefix}: {objects}")
                 results[prefix] = []
+            else:
+                results[prefix] = cast(List[Dict[str, Any]], objects)
 
         return results
 
