@@ -222,6 +222,79 @@ class S3ArtifactService(BaseArtifactService):
             return f"{app_name}/{user_id}/user/{clean_filename}/{version}"
         return f"{app_name}/{user_id}/{session_id}/{filename}/{version}"
 
+    async def _determine_next_version(
+        self, app_name: str, user_id: str, session_id: str, filename: str
+    ) -> int:
+        """Determine the next version number for an artifact."""
+        existing_versions = await self.list_versions(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id,
+            filename=filename,
+        )
+        return 0 if not existing_versions else max(existing_versions) + 1
+
+    def _prepare_artifact_data(self, artifact: types.Part) -> tuple[bytes, str]:
+        """Extract and validate artifact data and content type."""
+        if artifact.inline_data is None:
+            raise S3ArtifactError("Artifact has no inline data")
+        artifact_data = artifact.inline_data.data
+        if artifact_data is None:
+            raise S3ArtifactError("Artifact data is None")
+        content_type = artifact.inline_data.mime_type
+        if content_type is None:
+            raise S3ArtifactError("Artifact content type is None")
+        return artifact_data, content_type
+
+    def _prepare_metadata(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+        version: int,
+        content_hash: str,
+        encryption_metadata: dict[str, str],
+    ) -> dict[str, str]:
+        """Prepare metadata for S3 object."""
+        return {
+            "app-name": app_name,
+            "user-id": user_id,
+            "session-id": session_id,
+            "filename": filename,
+            "version": str(version),
+            "content-hash": content_hash,
+            **encryption_metadata,
+        }
+
+    async def _upload_artifact_data(
+        self,
+        object_key: str,
+        artifact_data: bytes,
+        content_type: str,
+        metadata: dict[str, str],
+    ) -> None:
+        """Upload artifact data using appropriate method based on size."""
+        if len(artifact_data) > self.multipart_manager.multipart_threshold:
+            await self.multipart_manager.upload_large_artifact(
+                object_key=object_key,
+                data=artifact_data,
+                content_type=content_type,
+                metadata=metadata,
+            )
+        else:
+            # Regular upload for smaller artifacts
+            await asyncio.get_running_loop().run_in_executor(
+                self._executor,
+                lambda: self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    Body=artifact_data,
+                    ContentType=content_type,
+                    Metadata=metadata,
+                ),
+            )
+
     async def save_artifact(
         self,
         *,
@@ -251,33 +324,20 @@ class S3ArtifactService(BaseArtifactService):
         @with_retry(self.retry_config)  # type: ignore[misc]
         async def _save_with_protection() -> int:
             try:
-                # Get existing versions to determine next version
-                existing_versions = await self.list_versions(
-                    app_name=app_name,
-                    user_id=user_id,
-                    session_id=session_id,
-                    filename=filename,
+                # Determine next version
+                version = await self._determine_next_version(
+                    app_name, user_id, session_id, filename
                 )
-                version = 0 if not existing_versions else max(existing_versions) + 1
 
-                # Use security manager for secure object key generation
+                # Generate and validate object key
                 object_key = self.security_manager.generate_secure_object_key(
                     app_name, user_id, session_id, filename, version
                 )
-
-                # Validate object key for security
                 if not self.security_manager.validate_object_key(object_key):
                     raise S3ArtifactError(f"Invalid object key: {object_key}")
 
                 # Prepare artifact data
-                if artifact.inline_data is None:
-                    raise S3ArtifactError("Artifact has no inline data")
-                artifact_data = artifact.inline_data.data
-                if artifact_data is None:
-                    raise S3ArtifactError("Artifact data is None")
-                content_type = artifact.inline_data.mime_type
-                if content_type is None:
-                    raise S3ArtifactError("Artifact content type is None")
+                artifact_data, content_type = self._prepare_artifact_data(artifact)
 
                 # Apply encryption if enabled
                 if self.enable_encryption and self.encryption_manager:
@@ -294,37 +354,20 @@ class S3ArtifactService(BaseArtifactService):
                 )
 
                 # Prepare metadata
-                metadata = {
-                    "app-name": app_name,
-                    "user-id": user_id,
-                    "session-id": session_id,
-                    "filename": filename,
-                    "version": str(version),
-                    "content-hash": content_hash,
-                    **encryption_metadata,
-                }
+                metadata = self._prepare_metadata(
+                    app_name,
+                    user_id,
+                    session_id,
+                    filename,
+                    version,
+                    content_hash,
+                    encryption_metadata,
+                )
 
-                # Use multipart upload for large artifacts or regular upload
-                # for smaller ones
-                if len(artifact_data) > self.multipart_manager.multipart_threshold:
-                    await self.multipart_manager.upload_large_artifact(
-                        object_key=object_key,
-                        data=artifact_data,
-                        content_type=content_type,
-                        metadata=metadata,
-                    )
-                else:
-                    # Regular upload for smaller artifacts
-                    await asyncio.get_running_loop().run_in_executor(
-                        self._executor,
-                        lambda: self.s3_client.put_object(
-                            Bucket=self.bucket_name,
-                            Key=object_key,
-                            Body=artifact_data,
-                            ContentType=content_type,
-                            Metadata=metadata,
-                        ),
-                    )
+                # Upload artifact data
+                await self._upload_artifact_data(
+                    object_key, artifact_data, content_type, metadata
+                )
 
                 logger.info(
                     f"Saved artifact {filename} version {version} to {object_key}"
@@ -341,6 +384,56 @@ class S3ArtifactService(BaseArtifactService):
 
         result = await _save_with_protection()
         return int(result)
+
+    async def _resolve_version_for_load(
+        self,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+        version: int | None,
+    ) -> int | None:
+        """Resolve the version to load, returning None if no versions exist."""
+        if version is None:
+            existing_versions = await self.list_versions(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                filename=filename,
+            )
+            if not existing_versions:
+                return None
+            return max(existing_versions)
+        return version
+
+    async def _download_artifact_from_s3(self, object_key: str) -> dict[str, Any]:
+        """Download artifact data from S3."""
+        return await asyncio.get_running_loop().run_in_executor(
+            self._executor,
+            lambda: self.s3_client.get_object(Bucket=self.bucket_name, Key=object_key),
+        )
+
+    def _process_downloaded_data(
+        self, response: dict[str, Any], filename: str
+    ) -> tuple[bytes, str, dict[str, str]]:
+        """Process downloaded S3 response data."""
+        data = response["Body"].read()
+        content_type = response["ContentType"]
+        metadata = response.get("Metadata", {})
+
+        # Verify content integrity if hash is available
+        stored_hash = metadata.get("content-hash")
+        if stored_hash:
+            if not self.security_manager.verify_content_integrity(data, stored_hash):
+                raise S3ArtifactError(
+                    f"Content integrity verification failed for {filename}"
+                )
+
+        # Apply decryption if needed
+        if self.enable_encryption and self.encryption_manager:
+            data = self.encryption_manager.decrypt_content(data, metadata)
+
+        return data, content_type, metadata
 
     async def load_artifact(
         self,
@@ -371,51 +464,25 @@ class S3ArtifactService(BaseArtifactService):
         @with_retry(self.retry_config)  # type: ignore[misc]
         async def _load_with_protection() -> types.Part | None:
             try:
-                # Determine version if not specified
-                if version is None:
-                    existing_versions = await self.list_versions(
-                        app_name=app_name,
-                        user_id=user_id,
-                        session_id=session_id,
-                        filename=filename,
-                    )
-                    if not existing_versions:
-                        return None
-                    actual_version = max(existing_versions)
-                else:
-                    actual_version = version
+                # Resolve version to load
+                actual_version = await self._resolve_version_for_load(
+                    app_name, user_id, session_id, filename, version
+                )
+                if actual_version is None:
+                    return None
 
-                # Use security manager for secure object key generation
+                # Generate object key
                 object_key = self.security_manager.generate_secure_object_key(
                     app_name, user_id, session_id, filename, actual_version
                 )
 
-                # Download from S3 asynchronously
-                response = await asyncio.get_running_loop().run_in_executor(
-                    self._executor,
-                    lambda: self.s3_client.get_object(
-                        Bucket=self.bucket_name, Key=object_key
-                    ),
+                # Download from S3
+                response = await self._download_artifact_from_s3(object_key)
+
+                # Process downloaded data
+                data, content_type, metadata = self._process_downloaded_data(
+                    response, filename
                 )
-
-                # Read data and metadata
-                data = response["Body"].read()
-                content_type = response["ContentType"]
-                metadata = response.get("Metadata", {})
-
-                # Verify content integrity if hash is available
-                stored_hash = metadata.get("content-hash")
-                if stored_hash:
-                    if not self.security_manager.verify_content_integrity(
-                        data, stored_hash
-                    ):
-                        raise S3ArtifactError(
-                            f"Content integrity verification failed for {filename}"
-                        )
-
-                # Apply decryption if needed
-                if self.enable_encryption and self.encryption_manager:
-                    data = self.encryption_manager.decrypt_content(data, metadata)
 
                 logger.info(
                     f"Loaded artifact {filename} version {actual_version} "
