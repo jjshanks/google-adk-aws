@@ -92,7 +92,7 @@ class S3ConnectionPool:
             # Create client with configuration
             client_kwargs = {"config": config}
             if endpoint_url:
-                client_kwargs["endpoint_url"] = endpoint_url
+                client_kwargs = client_kwargs | {"endpoint_url": endpoint_url}
 
             client = session.client("s3", **client_kwargs)
 

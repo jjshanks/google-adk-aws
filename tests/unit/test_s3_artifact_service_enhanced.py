@@ -362,7 +362,7 @@ class TestS3ArtifactServiceOperations:
     async def test_list_versions(self, artifact_service, sample_artifact):
         """Test listing versions of an artifact."""
         # Save multiple versions
-        for i in range(3):
+        for _ in range(3):
             await artifact_service.save_artifact(
                 app_name="test_app",
                 user_id="user123",
@@ -588,7 +588,7 @@ class TestS3ArtifactServiceConcurrency:
 
         # Concurrent loads
         tasks = []
-        for i in range(5):
+        for _ in range(5):
             task = artifact_service.load_artifact(
                 app_name="test_app",
                 user_id="user123",

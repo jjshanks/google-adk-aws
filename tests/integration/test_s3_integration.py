@@ -287,7 +287,7 @@ class TestS3IntegrationPerformance:
 
         # Concurrent read operations
         read_tasks = []
-        for i in range(10):
+        for _ in range(10):
             task = real_s3_service.load_artifact(
                 app_name="integration_test",
                 user_id="test_user",

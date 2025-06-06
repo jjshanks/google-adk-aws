@@ -263,8 +263,7 @@ class S3ArtifactService(BaseArtifactService):
             "filename": filename,
             "version": str(version),
             "content-hash": content_hash,
-            **encryption_metadata,
-        }
+        } | encryption_metadata
 
     async def _upload_artifact_data(
         self,
