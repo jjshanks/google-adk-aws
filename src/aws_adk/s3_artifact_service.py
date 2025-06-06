@@ -5,7 +5,6 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional, cast
 
-import boto3
 import botocore.exceptions
 from google.adk.artifacts import BaseArtifactService
 from google.genai import types
@@ -160,37 +159,6 @@ class S3ArtifactService(BaseArtifactService):
             raise S3ArtifactError(
                 f"Unexpected error during {operation}: {error}"
             ) from error
-
-    def _create_s3_client(self) -> Any:
-        """Create and configure S3 client with authentication.
-
-        Returns:
-            Configured boto3 S3 client
-
-        Raises:
-            S3ConnectionError: If client creation fails
-        """
-        try:
-            # Create session with provided credentials
-            session = boto3.Session(
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
-                aws_session_token=self.aws_session_token,
-                region_name=self.region_name,
-                **self.session_kwargs,
-            )
-
-            # Configure client options
-            client_config: dict[str, str] = {}
-            if self.endpoint_url:
-                client_config["endpoint_url"] = self.endpoint_url
-
-            return session.client("s3", **client_config)
-
-        except botocore.exceptions.ClientError as e:
-            raise S3ConnectionError(f"Failed to create S3 client: {e}") from e
-        except Exception as e:
-            raise S3ConnectionError(f"Unexpected error creating S3 client: {e}") from e
 
     def _verify_bucket_access(self) -> None:
         """Verify that the bucket exists and is accessible.
