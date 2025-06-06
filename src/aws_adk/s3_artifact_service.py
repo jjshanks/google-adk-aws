@@ -1,6 +1,5 @@
 """S3 Artifact Service implementation for Google ADK."""
 
-import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional, cast
@@ -98,8 +97,8 @@ class S3ArtifactService(BaseArtifactService):
         )
 
         # Use connection pool for optimized S3 client
-        connection_pool = get_connection_pool()
-        self.s3_client = connection_pool.get_client(
+        self.connection_pool = get_connection_pool()
+        self.s3_client = self.connection_pool.get_client(
             region_name=self.region_name,
             aws_access_key_id=self.aws_access_key_id,
             aws_secret_access_key=self.aws_secret_access_key,
@@ -284,15 +283,13 @@ class S3ArtifactService(BaseArtifactService):
             )
         else:
             # Regular upload for smaller artifacts
-            await asyncio.get_running_loop().run_in_executor(
-                self._executor,
-                lambda: self.s3_client.put_object(
-                    Bucket=self.bucket_name,
-                    Key=object_key,
-                    Body=artifact_data,
-                    ContentType=content_type,
-                    Metadata=metadata,
-                ),
+            await self.connection_pool.execute_async(
+                self.s3_client.put_object,
+                Bucket=self.bucket_name,
+                Key=object_key,
+                Body=artifact_data,
+                ContentType=content_type,
+                Metadata=metadata,
             )
 
     async def save_artifact(
@@ -408,9 +405,11 @@ class S3ArtifactService(BaseArtifactService):
 
     async def _download_artifact_from_s3(self, object_key: str) -> dict[str, Any]:
         """Download artifact data from S3."""
-        return await asyncio.get_running_loop().run_in_executor(
-            self._executor,
-            lambda: self.s3_client.get_object(Bucket=self.bucket_name, Key=object_key),
+        return cast(
+            dict[str, Any],
+            await self.connection_pool.execute_async(
+                self.s3_client.get_object, Bucket=self.bucket_name, Key=object_key
+            ),
         )
 
     def _process_downloaded_data(
@@ -557,7 +556,7 @@ class S3ArtifactService(BaseArtifactService):
                         filename = key_parts[-2]  # Second to last is filename
                         filenames.add(filename)
 
-        await asyncio.get_running_loop().run_in_executor(self._executor, _list_objects)
+        await self.connection_pool.execute_async(_list_objects)
 
     async def delete_artifact(
         self, *, app_name: str, user_id: str, session_id: str, filename: str
@@ -596,9 +595,7 @@ class S3ArtifactService(BaseArtifactService):
                         Bucket=self.bucket_name, Key=object_key
                     )
 
-            await asyncio.get_running_loop().run_in_executor(
-                self._executor, _delete_versions
-            )
+            await self.connection_pool.execute_async(_delete_versions)
 
             logger.info(f"Deleted {len(versions)} versions of artifact {filename}")
 
@@ -650,8 +647,8 @@ class S3ArtifactService(BaseArtifactService):
 
                 return sorted(versions)
 
-            versions = await asyncio.get_running_loop().run_in_executor(
-                self._executor, _list_versions
+            versions = cast(
+                list[int], await self.connection_pool.execute_async(_list_versions)
             )
 
             logger.debug(f"Found {len(versions)} versions for artifact {filename}")
@@ -721,8 +718,7 @@ class S3ArtifactService(BaseArtifactService):
 
     def get_connection_stats(self) -> dict:
         """Get connection pool statistics."""
-        connection_pool = get_connection_pool()
-        return connection_pool.get_stats()
+        return self.connection_pool.get_stats()
 
     def __del__(self) -> None:
         """Cleanup resources on object destruction."""
