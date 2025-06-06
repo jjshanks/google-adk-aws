@@ -222,7 +222,6 @@ class S3ArtifactService(BaseArtifactService):
             return f"{app_name}/{user_id}/user/{clean_filename}/{version}"
         return f"{app_name}/{user_id}/{session_id}/{filename}/{version}"
 
-    @with_retry()  # type: ignore[misc]
     async def save_artifact(
         self,
         *,
@@ -249,6 +248,7 @@ class S3ArtifactService(BaseArtifactService):
         """
 
         @self.write_circuit_breaker
+        @with_retry(self.retry_config)  # type: ignore[misc]
         async def _save_with_protection() -> int:
             try:
                 # Get existing versions to determine next version
@@ -342,7 +342,6 @@ class S3ArtifactService(BaseArtifactService):
         result = await _save_with_protection()
         return int(result)
 
-    @with_retry()  # type: ignore[misc]
     async def load_artifact(
         self,
         *,
@@ -369,6 +368,7 @@ class S3ArtifactService(BaseArtifactService):
         """
 
         @self.read_circuit_breaker
+        @with_retry(self.retry_config)  # type: ignore[misc]
         async def _load_with_protection() -> types.Part | None:
             try:
                 # Determine version if not specified
