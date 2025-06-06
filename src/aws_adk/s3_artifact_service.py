@@ -457,7 +457,7 @@ class S3ArtifactService(BaseArtifactService):
 
             except S3ArtifactNotFoundError:
                 # Not found is not an error condition for load
-                logger.debug(f"Artifact not found: {filename} version {version}")
+                logger.debug(f"Artifact not found: {filename} version {actual_version}")
                 return None
             except Exception as e:
                 logger.error(f"Failed to load artifact {filename}: {e}")
