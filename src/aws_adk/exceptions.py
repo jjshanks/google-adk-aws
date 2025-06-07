@@ -1,9 +1,101 @@
 """Enhanced exception hierarchy for comprehensive error handling."""
 
 import logging
+import re
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_context_for_logging(context: Dict[str, Any]) -> Dict[str, Any]:
+    """Sanitize context dictionary for safe logging by masking sensitive information."""
+    if not context:
+        return {}
+
+    # Fields that should be completely masked
+    SENSITIVE_FIELDS = {
+        "user_id",
+        "user-id",
+        "userId",
+        "userID",
+        "session_id",
+        "session-id",
+        "sessionId",
+        "sessionID",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_session_token",
+        "password",
+        "token",
+        "secret",
+        "key",
+        "credential",
+        "email",
+        "phone",
+        "ssn",
+        "social_security_number",
+    }
+
+    # Fields that should be partially masked (show first/last few chars)
+    PARTIALLY_MASKABLE_FIELDS = {
+        "app_name",
+        "app-name",
+        "appName",
+        "filename",
+        "object_key",
+        "bucket_name",
+    }
+
+    sanitized: Dict[str, Any] = {}
+
+    for key, value in context.items():
+        key_lower = key.lower().replace("-", "_").replace(" ", "_")
+
+        if key_lower in SENSITIVE_FIELDS:
+            # Completely mask sensitive fields
+            sanitized[key] = "***MASKED***"
+        elif (
+            key_lower in PARTIALLY_MASKABLE_FIELDS
+            and isinstance(value, str)
+            and len(value) > 6
+        ):
+            # Partially mask - show first 3 and last 3 characters
+            sanitized[key] = f"{value[:3]}***{value[-3:]}"
+        elif isinstance(value, str):
+            # Check if the string value looks like sensitive data
+            if _is_sensitive_string_value(value):
+                sanitized[key] = "***MASKED***"
+            else:
+                sanitized[key] = value
+        elif isinstance(value, dict):
+            # Recursively sanitize nested dictionaries
+            sanitized[key] = _sanitize_context_for_logging(value)
+        else:
+            # Keep non-string, non-dict values as-is (numbers, booleans, etc.)
+            sanitized[key] = value
+
+    return sanitized
+
+
+def _is_sensitive_string_value(value: str) -> bool:
+    """Check if a string value appears to contain sensitive information."""
+    if not isinstance(value, str) or len(value) < 8:
+        return False
+
+    # Patterns that might indicate sensitive data
+    sensitive_patterns = [
+        r"^[A-Z0-9]{20,}$",  # AWS access key pattern
+        r"^[A-Za-z0-9/+=]{40,}$",  # AWS secret key pattern
+        r"^[a-f0-9]{32,}$",  # Hash-like strings
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",  # Email pattern
+        r"\b\d{3}-?\d{2}-?\d{4}\b",  # SSN pattern
+    ]
+
+    for pattern in sensitive_patterns:
+        if re.search(pattern, value):
+            return True
+
+    return False
 
 
 class S3ArtifactError(Exception):
@@ -23,10 +115,11 @@ class S3ArtifactError(Exception):
         self.context = context or {}
         self.cause = cause
 
-        # Log error with full context
+        # Log error with sanitized context to avoid exposing sensitive data
+        sanitized_context = _sanitize_context_for_logging(self.context)
         logger.error(
             f"S3ArtifactError: {message} | Operation: {operation} | "
-            f"Code: {error_code} | Context: {self.context}"
+            f"Code: {error_code} | Context: {sanitized_context}"
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -36,8 +129,16 @@ class S3ArtifactError(Exception):
             "message": str(self),
             "error_code": self.error_code,
             "operation": self.operation,
-            "context": self.context,
+            "context": _sanitize_context_for_logging(self.context),
         }
+
+    def get_sanitized_context(self) -> Dict[str, Any]:
+        """Get sanitized context for safe logging/display."""
+        return _sanitize_context_for_logging(self.context)
+
+    def get_raw_context(self) -> Dict[str, Any]:
+        """Get raw context for debugging purposes. Use with caution."""
+        return self.context.copy()
 
 
 class S3ConnectionError(S3ArtifactError):

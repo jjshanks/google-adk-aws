@@ -22,6 +22,7 @@ from .edge_case_handlers import (
 from .exceptions import (
     S3ConnectionError,
     S3CorruptionError,
+    S3ThrottleError,
     S3ValidationError,
     map_boto3_error,
 )
@@ -82,11 +83,15 @@ class S3ArtifactService(BaseArtifactService):
 
         # Circuit breakers for different operation types
         self.read_circuit_breaker = CircuitBreaker(
-            failure_threshold=5, timeout=30.0, expected_exception=S3ConnectionError
+            failure_threshold=5,
+            timeout=30.0,
+            expected_exception=(S3ConnectionError, S3ThrottleError),
         )
 
         self.write_circuit_breaker = CircuitBreaker(
-            failure_threshold=3, timeout=60.0, expected_exception=S3ConnectionError
+            failure_threshold=3,
+            timeout=60.0,
+            expected_exception=(S3ConnectionError, S3ThrottleError),
         )
 
         # Initialize S3 client and components
@@ -443,7 +448,12 @@ class S3ArtifactService(BaseArtifactService):
                     )
 
             # Create and return types.Part
-            part = types.Part.from_bytes(data=content, mime_type=content_type)
+            # Decode bytes to text for text content types
+            if content_type.startswith("text/"):
+                text_content = content.decode("utf-8")
+                part = types.Part(text=text_content)
+            else:
+                part = types.Part.from_bytes(data=content, mime_type=content_type)
 
             logger.debug(
                 f"Successfully loaded artifact {filename} version {version} "

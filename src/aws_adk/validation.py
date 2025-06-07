@@ -35,6 +35,7 @@ class InputValidator:
     MAX_USER_ID_LENGTH = 100
     MAX_SESSION_ID_LENGTH = 100
     MAX_FILENAME_LENGTH = 255
+    MAX_SANITIZED_FILENAME_LENGTH = 250  # Leave room for user: prefix
     MAX_VERSION_NUMBER = 999999
 
     # Forbidden patterns
@@ -284,7 +285,9 @@ class InputValidator:
             # Ensure it starts with alphanumeric
             if sanitized and not sanitized[0].isalnum():
                 sanitized = "a" + sanitized
-            return sanitized[:100]  # Truncate to max length
+            return sanitized[
+                : self.MAX_APP_NAME_LENGTH
+            ]  # Use consistent max length for IDs
 
         def sanitize_filename(value: str) -> str:
             """Sanitize filename while preserving user: prefix if present."""
@@ -297,7 +300,7 @@ class InputValidator:
 
             # Sanitize the name part
             sanitized = re.sub(r"[^a-zA-Z0-9._:-]", "_", name_part)
-            return prefix + sanitized[:250]  # Leave room for prefix
+            return f"{prefix}{sanitized[:self.MAX_SANITIZED_FILENAME_LENGTH]}"
 
         return (
             sanitize_id(app_name),
@@ -382,12 +385,36 @@ class InputValidator:
 
             # Image validation (basic header check)
             elif mime_type.startswith("image/"):
-                if not self._is_valid_image_header(content, mime_type):
-                    errors.append("Invalid image file header")
+                try:
+                    if not self._is_valid_image_header(content, mime_type):
+                        errors.append("Invalid image file header")
+                except (IndexError, AttributeError) as e:
+                    # Specific errors from image header parsing
+                    logger.warning(
+                        f"Image header validation failed: {e}", exc_info=True
+                    )
+                    errors.append("Unable to validate image file header")
 
+        except (ImportError, ModuleNotFoundError) as e:
+            # Handle missing modules (like json import issues)
+            logger.error(
+                f"Module import error during content validation: {e}", exc_info=True
+            )
+            errors.append("Content validation module unavailable")
+        except (MemoryError, OSError) as e:
+            # Handle system-level errors that might occur with large content
+            logger.error(f"System error during content validation: {e}", exc_info=True)
+            errors.append("Content validation failed due to system constraints")
         except Exception as e:
-            logger.warning(f"Content validation error: {e}")
-            # Don't fail validation for content inspection errors
+            # For any other unexpected errors, log full traceback and re-raise
+            logger.error(
+                f"Unexpected error during content validation: {e}", exc_info=True
+            )
+            raise S3ValidationError(
+                message=f"Content validation failed unexpectedly: {e}",
+                error_code="ContentValidationError",
+                context={"mime_type": mime_type, "content_size": len(content)},
+            )
 
         return errors
 
@@ -412,13 +439,13 @@ class InputValidator:
         return any(content.startswith(header) for header in expected_headers)
 
 
-# Global validator instance
-_global_validator: Optional[InputValidator] = None
+# Global validator instances by strict_mode
+_global_validators: Dict[bool, InputValidator] = {}
 
 
 def get_validator(strict_mode: bool = True) -> InputValidator:
-    """Get global validator instance."""
-    global _global_validator
-    if _global_validator is None:
-        _global_validator = InputValidator(strict_mode=strict_mode)
-    return _global_validator
+    """Get validator instance for the specified strict_mode."""
+    global _global_validators
+    if strict_mode not in _global_validators:
+        _global_validators[strict_mode] = InputValidator(strict_mode=strict_mode)
+    return _global_validators[strict_mode]

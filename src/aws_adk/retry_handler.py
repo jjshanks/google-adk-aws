@@ -6,7 +6,7 @@ import random
 import time
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from .exceptions import (
     S3ConcurrencyError,
@@ -158,7 +158,9 @@ class CircuitBreaker:
         self,
         failure_threshold: int = 5,
         timeout: float = 60.0,
-        expected_exception: Type[Exception] = Exception,
+        expected_exception: Union[
+            Type[Exception], Tuple[Type[Exception], ...]
+        ] = Exception,
         success_threshold: int = 2,  # Successful calls needed to close circuit
         monitoring_window: float = 300.0,  # 5 minutes
     ):

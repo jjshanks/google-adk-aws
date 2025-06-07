@@ -86,7 +86,9 @@ async def demonstrate_s3_artifacts():
         # 1. Save multiple artifacts
         print("📁 1. Saving sample artifacts...")
         for filename, content in sample_data.items():
-            artifact = types.Part(text=content)
+            artifact = types.Part.from_bytes(
+                data=content.encode("utf-8"), mime_type="text/plain"
+            )
 
             version = await artifact_service.save_artifact(
                 app_name=app_name,
@@ -148,7 +150,9 @@ async def demonstrate_s3_artifacts():
                 f"Document version {i}\nUpdated at step {i}\n"
                 f"Content: {'A' * (10 + i * 5)}"
             )
-            artifact = types.Part(text=content)
+            artifact = types.Part.from_bytes(
+                data=content.encode("utf-8"), mime_type="text/plain"
+            )
             version = await artifact_service.save_artifact(
                 app_name=app_name,
                 user_id=user_id,
@@ -296,7 +300,9 @@ async def interactive_demo():
                 filename = command[1]
                 content = command[2]
 
-                artifact = types.Part(text=content)
+                artifact = types.Part.from_bytes(
+                    data=content.encode("utf-8"), mime_type="text/plain"
+                )
                 version = await artifact_service.save_artifact(
                     app_name=app_name,
                     user_id=user_id,
