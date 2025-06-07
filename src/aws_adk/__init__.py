@@ -10,10 +10,12 @@ from .exceptions import (
     S3ArtifactNotFoundError,
     S3ArtifactVersionError,
     S3BucketError,
+    S3ConcurrencyError,
     S3ConnectionError,
     S3ObjectError,
     S3PermissionError,
     S3ThrottleError,
+    S3ValidationError,
 )
 from .retry_handler import RetryConfig
 from .s3_artifact_service import S3ArtifactService
@@ -33,6 +35,8 @@ __all__ = [
     "S3ThrottleError",
     "S3ArtifactNotFoundError",
     "S3ArtifactVersionError",
+    "S3ConcurrencyError",
+    "S3ValidationError",
     "RetryConfig",
     "S3SecurityManager",
     "AccessControlManager",

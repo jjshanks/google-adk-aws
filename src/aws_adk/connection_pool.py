@@ -78,7 +78,7 @@ class S3ConnectionPool:
                 # Enable signature_version for better performance
                 signature_version="s3v4",
                 # Use virtual hosted-style addressing
-                addressing_style="virtual",
+                s3={"addressing_style": "virtual"},
             )
 
             # Create session
@@ -108,7 +108,10 @@ class S3ConnectionPool:
     ) -> Any:
         """Execute S3 operation asynchronously using thread pool."""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self._executor, func, *args, **kwargs)
+        from functools import partial
+
+        bound_func = partial(func, *args, **kwargs)
+        return await loop.run_in_executor(self._executor, bound_func)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get connection pool statistics."""
