@@ -23,7 +23,7 @@ class TestRetryConfig:
         assert config.max_total_time is None  # Default is None
         assert config.backoff_strategy == "exponential"
 
-    def test_custom_config(self):
+    def test_custom_config(self) -> None:
         """Test custom configuration values."""
         config = RetryConfig(
             max_attempts=5,
@@ -59,7 +59,9 @@ class TestRetryConfig:
             ("fixed", 3, 1.0),
         ],
     )
-    def test_calculate_delay_strategies(self, strategy, attempt, expected_base):
+    def test_calculate_delay_strategies(
+        self, strategy: str, attempt: int, expected_base: float
+    ) -> None:
         """Test different backoff strategies."""
         config = RetryConfig(base_delay=1.0, backoff_strategy=strategy, jitter=False)
         context = RetryContext(
@@ -74,7 +76,7 @@ class TestRetryConfig:
         delay = config.calculate_delay(attempt, context)
         assert delay == expected_base
 
-    def test_calculate_delay_with_max_delay(self):
+    def test_calculate_delay_with_max_delay(self) -> None:
         """Test delay calculation respects max_delay."""
         config = RetryConfig(
             base_delay=1.0, max_delay=5.0, backoff_strategy="exponential", jitter=False
@@ -91,7 +93,7 @@ class TestRetryConfig:
         delay = config.calculate_delay(10, context)
         assert delay == 5.0  # Capped at max_delay
 
-    def test_calculate_delay_with_jitter(self):
+    def test_calculate_delay_with_jitter(self) -> None:
         """Test delay calculation with jitter."""
         config = RetryConfig(base_delay=1.0, backoff_strategy="fixed", jitter=True)
         context = RetryContext(
@@ -116,7 +118,9 @@ class TestRetryConfig:
             (RuntimeError, False),
         ],
     )
-    def test_should_retry_error_types(self, error_type, should_retry):
+    def test_should_retry_error_types(
+        self, error_type: type, should_retry: bool
+    ) -> None:
         """Test should_retry with different error types."""
         config = RetryConfig()
         context = RetryContext(
@@ -131,7 +135,7 @@ class TestRetryConfig:
         error = error_type("Test error")
         assert config.should_retry(error, context) == should_retry
 
-    def test_should_retry_max_total_time_exceeded(self):
+    def test_should_retry_max_total_time_exceeded(self) -> None:
         """Test should_retry when max_total_time is exceeded."""
         config = RetryConfig(max_total_time=1.0)  # 1 second max
         start_time = time.time() - 2.0  # Started 2 seconds ago
@@ -151,7 +155,7 @@ class TestRetryConfig:
 class TestRetryContext:
     """Test RetryContext functionality."""
 
-    def test_elapsed_time(self):
+    def test_elapsed_time(self) -> None:
         """Test elapsed_time calculation."""
         start_time = time.time() - 1.0  # 1 second ago
         context = RetryContext(
@@ -171,13 +175,13 @@ class TestWithRetry:
     """Test with_retry decorator functionality."""
 
     @pytest.mark.asyncio
-    async def test_successful_execution_no_retry(self):
+    async def test_successful_execution_no_retry(self) -> None:
         """Test successful execution without retries."""
         config = RetryConfig(max_attempts=3)
         call_count = 0
 
         @with_retry(config)
-        async def test_func():
+        async def test_func() -> str:
             nonlocal call_count
             call_count += 1
             return "success"
@@ -187,7 +191,7 @@ class TestWithRetry:
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_retry_on_retryable_error(self):
+    async def test_retry_on_retryable_error(self) -> None:
         """Test retry behavior on retryable errors."""
         config = RetryConfig(
             max_attempts=3, base_delay=0.01
@@ -195,7 +199,7 @@ class TestWithRetry:
         call_count = 0
 
         @with_retry(config)
-        async def test_func():
+        async def test_func() -> str:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
@@ -218,13 +222,13 @@ class TestWithRetry:
         assert call_count == 3
 
     @pytest.mark.asyncio
-    async def test_no_retry_on_non_retryable_error(self):
+    async def test_no_retry_on_non_retryable_error(self) -> None:
         """Test no retry on non-retryable errors."""
         config = RetryConfig(max_attempts=3)
         call_count = 0
 
         @with_retry(config)
-        async def test_func():
+        async def test_func() -> None:
             nonlocal call_count
             call_count += 1
             raise ValueError("Not retryable")
@@ -236,13 +240,13 @@ class TestWithRetry:
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_max_attempts_exceeded(self):
+    async def test_max_attempts_exceeded(self) -> None:
         """Test behavior when max attempts are exceeded."""
         config = RetryConfig(max_attempts=2, base_delay=0.01)
         call_count = 0
 
         @with_retry(config)
-        async def test_func():
+        async def test_func() -> None:
             nonlocal call_count
             call_count += 1
             from botocore.exceptions import ClientError
@@ -257,13 +261,13 @@ class TestWithRetry:
         assert call_count == 2
 
     @pytest.mark.asyncio
-    async def test_max_total_time_exceeded(self):
+    async def test_max_total_time_exceeded(self) -> None:
         """Test behavior when max total time is exceeded."""
         config = RetryConfig(max_attempts=10, max_total_time=0.1, base_delay=0.05)
         call_count = 0
 
         @with_retry(config)
-        async def test_func():
+        async def test_func() -> None:
             nonlocal call_count
             call_count += 1
             from botocore.exceptions import ClientError
@@ -282,7 +286,7 @@ class TestWithRetry:
 class TestCircuitBreaker:
     """Test CircuitBreaker functionality."""
 
-    def test_initial_state(self):
+    def test_initial_state(self) -> None:
         """Test circuit breaker initial state."""
         cb = CircuitBreaker(
             failure_threshold=3, timeout=10.0, expected_exception=S3ConnectionError
@@ -292,14 +296,14 @@ class TestCircuitBreaker:
         assert cb.success_count == 0
 
     @pytest.mark.asyncio
-    async def test_success_in_closed_state(self):
+    async def test_success_in_closed_state(self) -> None:
         """Test successful execution in CLOSED state."""
         cb = CircuitBreaker(
             failure_threshold=3, timeout=10.0, expected_exception=S3ConnectionError
         )
 
         @cb
-        async def test_func():
+        async def test_func() -> str:
             return "success"
 
         result = await test_func()
@@ -308,14 +312,14 @@ class TestCircuitBreaker:
         assert cb.failure_count == 0
 
     @pytest.mark.asyncio
-    async def test_failures_reach_threshold(self):
+    async def test_failures_reach_threshold(self) -> None:
         """Test circuit breaker opens when failure threshold is reached."""
         cb = CircuitBreaker(
             failure_threshold=2, timeout=0.1, expected_exception=S3ConnectionError
         )
 
         @cb
-        async def test_func():
+        async def test_func() -> None:
             raise S3ConnectionError("Connection failed")
 
         # First failure
@@ -331,14 +335,14 @@ class TestCircuitBreaker:
         assert cb.failure_count == 2
 
     @pytest.mark.asyncio
-    async def test_open_state_raises_immediately(self):
+    async def test_open_state_raises_immediately(self) -> None:
         """Test circuit breaker raises immediately when OPEN."""
         cb = CircuitBreaker(
             failure_threshold=1, timeout=0.1, expected_exception=S3ConnectionError
         )
 
         @cb
-        async def test_func():
+        async def test_func() -> None:
             raise S3ConnectionError("Connection failed")
 
         # Trigger failure to open circuit
@@ -351,7 +355,7 @@ class TestCircuitBreaker:
             await test_func()
 
     @pytest.mark.asyncio
-    async def test_half_open_recovery(self):
+    async def test_half_open_recovery(self) -> None:
         """Test circuit breaker recovery through HALF_OPEN state."""
         cb = CircuitBreaker(
             failure_threshold=1,
@@ -363,7 +367,7 @@ class TestCircuitBreaker:
         call_count = 0
 
         @cb
-        async def test_func():
+        async def test_func() -> str:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -384,7 +388,7 @@ class TestCircuitBreaker:
         assert cb.state == "CLOSED"
         assert cb.failure_count == 0
 
-    def test_get_stats(self):
+    def test_get_stats(self) -> None:
         """Test circuit breaker statistics."""
         cb = CircuitBreaker(
             failure_threshold=3, timeout=10.0, expected_exception=S3ConnectionError
@@ -398,7 +402,7 @@ class TestCircuitBreaker:
         assert stats["recent_successes"] == 0
         assert stats["last_failure_time"] is None
 
-    def test_clean_history(self):
+    def test_clean_history(self) -> None:
         """Test history cleanup functionality."""
         cb = CircuitBreaker(
             failure_threshold=3,
@@ -420,14 +424,14 @@ class TestCircuitBreaker:
         assert len(cb.success_history) == 0
 
     @pytest.mark.asyncio
-    async def test_non_expected_exception_not_counted(self):
+    async def test_non_expected_exception_not_counted(self) -> None:
         """Test that non-expected exceptions don't count as failures."""
         cb = CircuitBreaker(
             failure_threshold=1, timeout=10.0, expected_exception=S3ConnectionError
         )
 
         @cb
-        async def test_func():
+        async def test_func() -> None:
             raise ValueError("Different error type")
 
         # ValueError should be raised but not count as circuit breaker failure
@@ -435,3 +439,45 @@ class TestCircuitBreaker:
             await test_func()
         assert cb.state == "CLOSED"
         assert cb.failure_count == 0
+
+    @pytest.mark.asyncio
+    async def test_half_open_success_count_tracking(self) -> None:
+        """Test that success count is properly tracked in HALF_OPEN state."""
+        cb = CircuitBreaker(
+            failure_threshold=1,
+            timeout=0.01,
+            expected_exception=S3ConnectionError,
+            success_threshold=2,  # Need 2 successes to close
+        )
+
+        call_count = 0
+
+        @cb
+        async def test_func() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise S3ConnectionError("First failure")
+            return f"success_{call_count}"
+
+        # First call fails, opens circuit
+        with pytest.raises(S3ConnectionError):
+            await test_func()
+        assert cb.state == "OPEN"
+        assert cb.failure_count == 1
+
+        # Wait for timeout
+        await asyncio.sleep(0.02)
+
+        # First success in HALF_OPEN - should stay HALF_OPEN
+        result = await test_func()
+        assert result == "success_2"
+        assert cb.state == "HALF_OPEN"
+        assert cb.success_count == 1
+
+        # Second success in HALF_OPEN - should transition to CLOSED
+        result = await test_func()
+        assert result == "success_3"
+        assert cb.state == "CLOSED"
+        assert cb.success_count == 2  # Should retain count
+        assert cb.failure_count == 0  # Should be reset
