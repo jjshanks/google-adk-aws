@@ -21,20 +21,20 @@ The abstract base class defines five core methods that must be implemented by an
 
 ```python
 class BaseArtifactService(ABC):
-    async def save_artifact(self, *, app_name: str, user_id: str, 
-                           session_id: str, filename: str, 
+    async def save_artifact(self, *, app_name: str, user_id: str,
+                           session_id: str, filename: str,
                            artifact: types.Part) -> int
-    
+
     async def load_artifact(self, *, app_name: str, user_id: str,
                            session_id: str, filename: str,
                            version: Optional[int] = None) -> Optional[types.Part]
-    
+
     async def list_artifact_keys(self, *, app_name: str, user_id: str,
                                 session_id: str) -> list[str]
-    
+
     async def delete_artifact(self, *, app_name: str, user_id: str,
                              session_id: str, filename: str) -> None
-    
+
     async def list_versions(self, *, app_name: str, user_id: str,
                            session_id: str, filename: str) -> list[int]
 ```
@@ -190,7 +190,7 @@ from google.genai import types
 async def save_text_artifact(tool_context: ToolContext, content: str):
     artifact = types.Part(
         inline_data=types.Blob(
-            mime_type='text/plain', 
+            mime_type='text/plain',
             data=content.encode('utf-8')
         )
     )
@@ -239,16 +239,16 @@ class CustomArtifactService(BaseArtifactService):
     def __init__(self, connection_string: str):
         self.connection_string = connection_string
         # Initialize your storage backend
-    
+
     def _file_has_user_namespace(self, filename: str) -> bool:
         return filename.startswith("user:")
-    
-    def _build_path(self, app_name: str, user_id: str, 
+
+    def _build_path(self, app_name: str, user_id: str,
                    session_id: str, filename: str) -> str:
         if self._file_has_user_namespace(filename):
             return f"{app_name}/{user_id}/user/{filename}"
         return f"{app_name}/{user_id}/{session_id}/{filename}"
-    
+
     @override
     async def save_artifact(self, *, app_name: str, user_id: str,
                            session_id: str, filename: str,
@@ -259,13 +259,13 @@ class CustomArtifactService(BaseArtifactService):
             session_id=session_id, filename=filename
         )
         version = 0 if not versions else max(versions) + 1
-        
+
         # Store artifact with version
         path = self._build_path(app_name, user_id, session_id, filename)
         # Your storage logic here
-        
+
         return version
-    
+
     @override
     async def load_artifact(self, *, app_name: str, user_id: str,
                            session_id: str, filename: str,
@@ -278,23 +278,23 @@ class CustomArtifactService(BaseArtifactService):
             if not versions:
                 return None
             version = max(versions)
-        
+
         # Your retrieval logic here
         # Return types.Part or None if not found
-    
+
     @override
     async def list_artifact_keys(self, *, app_name: str, user_id: str,
                                 session_id: str) -> list[str]:
         # List both session and user-scoped artifacts
         # Return sorted list of filenames
         pass
-    
+
     @override
     async def delete_artifact(self, *, app_name: str, user_id: str,
                              session_id: str, filename: str) -> None:
         # Delete all versions of the artifact
         pass
-    
+
     @override
     async def list_versions(self, *, app_name: str, user_id: str,
                            session_id: str, filename: str) -> list[int]:
@@ -380,7 +380,7 @@ This enables UI components to react to artifact changes in real-time.
 ### Common Issues
 
 1. **Missing artifact service**: Ensure artifact service is properly configured in Runner
-2. **Version conflicts**: Check version number handling in custom implementations  
+2. **Version conflicts**: Check version number handling in custom implementations
 3. **Namespace confusion**: Verify "user:" prefix handling for cross-session artifacts
 4. **MIME type mismatches**: Ensure proper content type handling
 5. **Storage permissions**: Verify backend storage permissions (GCS bucket access)
