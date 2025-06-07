@@ -11,13 +11,13 @@ This script demonstrates:
 5. Content integrity verification and corruption detection
 
 Usage:
-    export S3_TEST_BUCKET=your-test-bucket
-    export AWS_DEFAULT_REGION=us-east-1
+    Copy examples/.env.example to examples/.env and configure:
+    S3_BUCKET_NAME=your-test-bucket
+    AWS_REGION=us-east-1
     python examples/phase3_error_handling_demo.py
 """
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,12 @@ from google.genai import types
 
 # Add the src directory to the path so we can import our package
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from common.config import (  # noqa: E402
+    get_optional_env,
+    load_demo_config,
+    print_config_summary,
+)
 
 from aws_adk import (  # noqa: E402
     RetryConfig,
@@ -39,12 +45,12 @@ async def demo_comprehensive_error_handling():
     """Demonstrate comprehensive error handling capabilities."""
     print("=== Comprehensive Error Handling Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     # Create service with all Phase 3 features enabled
     service = S3ArtifactService(
         bucket_name=bucket_name,
-        region_name="us-east-1",
+        region_name=get_optional_env("AWS_REGION", "us-east-1"),
         enable_validation=True,  # Input validation and sanitization
         enable_security_checks=True,  # Security validation
         enable_integrity_checks=True,  # Content integrity verification
@@ -103,7 +109,7 @@ async def demo_edge_case_handling():
     """Demonstrate edge case handling capabilities."""
     print("\n=== Edge Case Handling Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     service = S3ArtifactService(
         bucket_name=bucket_name,
@@ -194,7 +200,7 @@ async def demo_error_recovery():
     """Demonstrate error recovery and retry mechanisms."""
     print("\n=== Error Recovery & Retry Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     # Create service with aggressive retry settings for demo
     service = S3ArtifactService(
@@ -259,7 +265,7 @@ async def demo_concurrency_handling():
     """Demonstrate concurrency control and conflict resolution."""
     print("\n=== Concurrency Control Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     service = S3ArtifactService(
         bucket_name=bucket_name,
@@ -306,7 +312,7 @@ async def demo_cleanup():
     """Clean up demo artifacts."""
     print("\n=== Cleanup Demo Artifacts ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     service = S3ArtifactService(bucket_name=bucket_name)
 
@@ -342,8 +348,12 @@ async def demo_cleanup():
 
 async def main():
     """Run all Phase 3 demos."""
-    print("🚀 Phase 3 Error Handling & Edge Cases Demo")
+    print("Phase 3 Error Handling & Edge Cases Demo")
     print("=" * 50)
+
+    # Load configuration
+    load_demo_config()
+    print_config_summary()
 
     try:
         # Run all demo sections
@@ -353,22 +363,26 @@ async def main():
         await demo_concurrency_handling()
 
         print("\n" + "=" * 50)
-        print("✅ All Phase 3 demos completed successfully!")
+        print("All Phase 3 demos completed successfully!")
 
     except Exception as e:
-        print(f"\n❌ Demo failed with error: {e}")
+        print(f"\nDemo failed with error: {e}")
 
     finally:
         # Always clean up
         await demo_cleanup()
-        print("\n🎯 Demo complete!")
+        print("\nDemo complete!")
 
 
 if __name__ == "__main__":
+    # Load config first to check for required variables
+    load_demo_config()
+
     # Check for required environment variables
-    if not os.environ.get("S3_TEST_BUCKET"):
-        print("❌ Error: S3_TEST_BUCKET environment variable is required")
-        print("Example: export S3_TEST_BUCKET=my-test-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME")
+    if not bucket_name:
+        print("Error: S3_BUCKET_NAME environment variable is required")
+        print("Please copy examples/.env.example to examples/.env and configure it")
         sys.exit(1)
 
     # Run the demo

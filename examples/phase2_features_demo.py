@@ -9,13 +9,13 @@ This script demonstrates:
 4. Monitoring and diagnostics capabilities
 
 Usage:
-    export S3_TEST_BUCKET=your-test-bucket
-    export AWS_DEFAULT_REGION=us-east-1
+    Copy examples/.env.example to examples/.env and configure:
+    S3_BUCKET_NAME=your-test-bucket
+    AWS_REGION=us-east-1
     python examples/phase2_features_demo.py
 """
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 
@@ -24,6 +24,12 @@ from google.genai import types
 # Add the src directory to the path so we can import our package
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from common.config import (  # noqa: E402
+    get_optional_env,
+    load_demo_config,
+    print_config_summary,
+)
+
 from aws_adk import RetryConfig, S3ArtifactService  # noqa: E402
 
 
@@ -31,19 +37,19 @@ async def demo_basic_operations():
     """Demonstrate basic artifact operations with enhanced features."""
     print("=== Basic Operations Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     # Create service with enhanced features
     service = S3ArtifactService(
         bucket_name=bucket_name,
-        region_name="us-east-1",
+        region_name=get_optional_env("AWS_REGION", "us-east-1"),
         enable_encryption=True,  # Enable client-side encryption
         retry_config=RetryConfig(max_attempts=5, base_delay=1.0),  # Custom retry config
     )
 
     # Create test artifact
-    artifact = types.Part.from_text(
-        "This is a test artifact with enhanced Phase 2 features!",
+    artifact = types.Part.from_bytes(
+        data="This is a test artifact with enhanced Phase 2 features!".encode("utf-8"),
         mime_type="text/plain",
     )
 
@@ -94,10 +100,12 @@ async def demo_security_features():
     """Demonstrate security features."""
     print("\n=== Security Features Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
     service = S3ArtifactService(
-        bucket_name=bucket_name, region_name="us-east-1", enable_encryption=True
+        bucket_name=bucket_name,
+        region_name=get_optional_env("AWS_REGION", "us-east-1"),
+        enable_encryption=True,
     )
 
     try:
@@ -114,7 +122,9 @@ async def demo_security_features():
                 print(f"  - {rec}")
 
         # Save a test artifact for presigned URL demo
-        artifact = types.Part.from_text("Secure content", mime_type="text/plain")
+        artifact = types.Part.from_bytes(
+            data="Secure content".encode("utf-8"), mime_type="text/plain"
+        )
         await service.save_artifact(
             app_name="security_demo",
             user_id="demo_user",
@@ -153,9 +163,11 @@ async def demo_performance_features():
     """Demonstrate performance optimization features."""
     print("\n=== Performance Features Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
-    service = S3ArtifactService(bucket_name=bucket_name, region_name="us-east-1")
+    service = S3ArtifactService(
+        bucket_name=bucket_name, region_name=get_optional_env("AWS_REGION", "us-east-1")
+    )
 
     try:
         # Check connection pool statistics
@@ -168,7 +180,9 @@ async def demo_performance_features():
 
         # Demo batch operations - create multiple small artifacts
         print("\nCreating multiple artifacts for batch demo...")
-        artifact = types.Part.from_text("Batch test content", mime_type="text/plain")
+        artifact = types.Part.from_bytes(
+            data="Batch test content".encode("utf-8"), mime_type="text/plain"
+        )
 
         filenames = [f"batch_file_{i:03d}.txt" for i in range(5)]
 
@@ -214,15 +228,19 @@ async def demo_large_file_handling():
     """Demonstrate large file handling with multipart upload."""
     print("\n=== Large File Handling Demo ===")
 
-    bucket_name = os.environ.get("S3_TEST_BUCKET", "test-demo-bucket")
+    bucket_name = get_optional_env("S3_BUCKET_NAME", "test-demo-bucket")
 
-    service = S3ArtifactService(bucket_name=bucket_name, region_name="us-east-1")
+    service = S3ArtifactService(
+        bucket_name=bucket_name, region_name=get_optional_env("AWS_REGION", "us-east-1")
+    )
 
     try:
         # Create a large artifact (1MB) to trigger potential multipart upload
         print("Creating large artifact (1MB)...")
         large_content = "X" * (1024 * 1024)  # 1MB of data
-        large_artifact = types.Part.from_text(large_content, mime_type="text/plain")
+        large_artifact = types.Part.from_bytes(
+            data=large_content.encode("utf-8"), mime_type="text/plain"
+        )
 
         print("Saving large artifact...")
         version = await service.save_artifact(
@@ -265,10 +283,14 @@ async def main():
     print("Google ADK AWS S3 Artifact Service - Phase 2 Features Demo")
     print("=" * 60)
 
+    # Load configuration
+    load_demo_config()
+    print_config_summary()
+
     # Check environment
-    bucket_name = os.environ.get("S3_TEST_BUCKET")
+    bucket_name = get_optional_env("S3_BUCKET_NAME")
     if not bucket_name:
-        print("Warning: S3_TEST_BUCKET not set, using default test bucket name")
+        print("Warning: S3_BUCKET_NAME not set, using default test bucket name")
         print("Note: Ensure you have AWS credentials configured and the bucket exists")
 
     try:

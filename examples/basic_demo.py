@@ -1,30 +1,38 @@
-# Copyright 2024 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+#!/usr/bin/env python3
+"""
+Basic demonstration of S3 artifact operations.
 
-"""Standalone demonstration of S3 artifact operations."""
+This script demonstrates:
+1. Basic CRUD operations (save, load, list, delete)
+2. File versioning and content management
+3. Session vs user-scoped files
+4. Error handling and cleanup
+
+Usage:
+    Copy examples/.env.example to examples/.env and configure:
+    S3_BUCKET_NAME=your-test-bucket
+    AWS_REGION=us-east-1
+    python examples/basic_demo.py
+"""
 
 import asyncio
 import logging
-import os
+import sys
+from pathlib import Path
 
-from dotenv import load_dotenv
 from google.genai import types
 
-from aws_adk.s3_artifact_service import S3ArtifactService
+# Add the src directory to the path so we can import our package
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-# Load environment variables
-load_dotenv()
+from common.config import (  # noqa: E402
+    get_optional_env,
+    get_required_env,
+    load_demo_config,
+    print_config_summary,
+)
+
+from aws_adk import S3ArtifactService  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,25 +42,24 @@ logger = logging.getLogger(__name__)
 async def demonstrate_s3_artifacts():
     """Complete demonstration of S3 artifact operations."""
 
+    # Load configuration
+    load_demo_config()
+
     # Check required environment variables
-    bucket_name = os.getenv("S3_BUCKET_NAME")
-    if not bucket_name:
-        print("❌ Error: S3_BUCKET_NAME environment variable is required")
-        print("Please create a .env file based on .env.example")
-        return
+    bucket_name = get_required_env("S3_BUCKET_NAME")
 
     # Initialize S3 artifact service
     try:
         artifact_service = S3ArtifactService(
             bucket_name=bucket_name,
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-            aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
-            endpoint_url=os.getenv("S3_ENDPOINT_URL"),
+            region_name=get_optional_env("AWS_REGION", "us-east-1"),
+            aws_access_key_id=get_optional_env("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=get_optional_env("AWS_SECRET_ACCESS_KEY"),
+            aws_session_token=get_optional_env("AWS_SESSION_TOKEN"),
+            endpoint_url=get_optional_env("S3_ENDPOINT_URL"),
         )
     except Exception as e:
-        print(f"❌ Error initializing S3 service: {e}")
+        print(f"Error initializing S3 service: {e}")
         print("Please check your AWS credentials and bucket configuration")
         return
 
@@ -77,14 +84,13 @@ async def demonstrate_s3_artifacts():
     session_id = "demo_session"
 
     try:
-        print("🚀 S3 Artifact Service Demo")
+        print("S3 Artifact Service Demo")
         print("=" * 50)
-        print(f"Bucket: {bucket_name}")
-        print(f"Region: {os.getenv('AWS_REGION', 'us-east-1')}")
+        print_config_summary()
         print()
 
         # 1. Save multiple artifacts
-        print("📁 1. Saving sample artifacts...")
+        print("1. Saving sample artifacts...")
         for filename, content in sample_data.items():
             artifact = types.Part.from_bytes(
                 data=content.encode("utf-8"), mime_type="text/plain"
@@ -97,13 +103,13 @@ async def demonstrate_s3_artifacts():
                 filename=filename,
                 artifact=artifact,
             )
-            scope = "👤 User" if filename.startswith("user:") else "📄 Session"
-            print(f"  ✓ {scope}: {filename} → version {version}")
+            scope = "User" if filename.startswith("user:") else "Session"
+            print(f"  {scope}: {filename} → version {version}")
 
         print()
 
         # 2. List all artifacts
-        print("📋 2. Listing all artifacts...")
+        print("2. Listing all artifacts...")
         artifact_keys = await artifact_service.list_artifact_keys(
             app_name=app_name, user_id=user_id, session_id=session_id
         )
@@ -112,12 +118,12 @@ async def demonstrate_s3_artifacts():
         user_files = [f for f in artifact_keys if f.startswith("user:")]
 
         if session_files:
-            print("  📄 Session-scoped files:")
+            print("  Session-scoped files:")
             for f in session_files:
                 print(f"     • {f}")
 
         if user_files:
-            print("  👤 User-scoped files:")
+            print("  User-scoped files:")
             for f in user_files:
                 print(f"     • {f}")
 
@@ -125,7 +131,7 @@ async def demonstrate_s3_artifacts():
         print()
 
         # 3. Load and preview artifacts
-        print("📖 3. Loading artifact content...")
+        print("3. Loading artifact content...")
         for filename in artifact_keys:
             artifact = await artifact_service.load_artifact(
                 app_name=app_name,
@@ -136,18 +142,18 @@ async def demonstrate_s3_artifacts():
             if artifact:
                 content = artifact.text
                 preview = content[:60] + "..." if len(content) > 60 else content
-                preview = preview.replace("\n", " ")
-                print(f"  📄 {filename}: {preview}")
+                preview = preview.replace("\\n", " ")
+                print(f"  {filename}: {preview}")
         print()
 
         # 4. Demonstrate versioning
-        print("🔄 4. Testing versioning...")
+        print("4. Testing versioning...")
         test_filename = "versioned_document.txt"
 
         # Save multiple versions
         for i in range(4):
             content = (
-                f"Document version {i}\nUpdated at step {i}\n"
+                f"Document version {i}\\nUpdated at step {i}\\n"
                 f"Content: {'A' * (10 + i * 5)}"
             )
             artifact = types.Part.from_bytes(
@@ -160,7 +166,7 @@ async def demonstrate_s3_artifacts():
                 filename=test_filename,
                 artifact=artifact,
             )
-            print(f"  ✓ Created version {version} ({len(content)} chars)")
+            print(f"  Created version {version} ({len(content)} chars)")
 
         # List versions
         versions = await artifact_service.list_versions(
@@ -169,10 +175,10 @@ async def demonstrate_s3_artifacts():
             session_id=session_id,
             filename=test_filename,
         )
-        print(f"  📚 Available versions: {versions}")
+        print(f"  Available versions: {versions}")
 
         # Load specific versions
-        print("  📖 Version comparison:")
+        print("  Version comparison:")
         for v in [0, len(versions) - 1]:  # First and last versions
             artifact_v = await artifact_service.load_artifact(
                 app_name=app_name,
@@ -181,12 +187,12 @@ async def demonstrate_s3_artifacts():
                 filename=test_filename,
                 version=v,
             )
-            content_preview = artifact_v.text.split("\n")[0]  # First line only
+            content_preview = artifact_v.text.split("\\n")[0]  # First line only
             print(f"     Version {v}: {content_preview}")
         print()
 
         # 5. Cross-session artifact access
-        print("🔄 5. Testing cross-session access...")
+        print("5. Testing cross-session access...")
         different_session = "different_session_123"
 
         # List artifacts from different session (should include user files)
@@ -195,7 +201,7 @@ async def demonstrate_s3_artifacts():
         )
 
         user_artifacts = [f for f in cross_session_artifacts if f.startswith("user:")]
-        print(f"  👤 User files available in other session: {user_artifacts}")
+        print(f"  User files available in other session: {user_artifacts}")
 
         if user_artifacts:
             # Load user file from different session
@@ -207,11 +213,11 @@ async def demonstrate_s3_artifacts():
                 filename=user_file,
             )
             if artifact:
-                print(f"  ✓ Successfully loaded {user_file} from different session")
+                print(f"  Successfully loaded {user_file} from different session")
         print()
 
         # 6. Cleanup demonstration
-        print("🧹 6. Cleanup operations...")
+        print("6. Cleanup operations...")
         cleanup_files = ["report.txt", "analysis.csv", "notes.md", test_filename]
 
         for filename in cleanup_files:
@@ -222,19 +228,19 @@ async def demonstrate_s3_artifacts():
                     session_id=session_id,
                     filename=filename,
                 )
-                print(f"  ✓ Deleted {filename}")
+                print(f"  Deleted {filename}")
             except Exception as e:
-                print(f"  ⚠️  Could not delete {filename}: {e}")
+                print(f"  Could not delete {filename}: {e}")
 
         # Final count
         final_artifacts = await artifact_service.list_artifact_keys(
             app_name=app_name, user_id=user_id, session_id=session_id
         )
-        print(f"  📊 Artifacts remaining: {len(final_artifacts)}")
+        print(f"  Artifacts remaining: {len(final_artifacts)}")
 
         print()
-        print("✅ Demo completed successfully!")
-        print("💡 Key takeaways:")
+        print("Demo completed successfully!")
+        print("Key takeaways:")
         print("   • Use 'user:' prefix for files that persist across sessions")
         print("   • Versioning is automatic and incremental")
         print("   • Different MIME types are supported automatically")
@@ -242,7 +248,7 @@ async def demonstrate_s3_artifacts():
 
     except Exception as e:
         logger.error(f"Demo failed: {e}")
-        print(f"❌ Error during demo: {e}")
+        print(f"Error during demo: {e}")
         print(
             "Please check your AWS credentials, bucket permissions, and "
             "network connectivity."
@@ -252,23 +258,23 @@ async def demonstrate_s3_artifacts():
 async def interactive_demo():
     """Interactive mode for testing S3 operations."""
 
-    bucket_name = os.getenv("S3_BUCKET_NAME")
-    if not bucket_name:
-        print("❌ Error: S3_BUCKET_NAME environment variable is required")
-        return
+    # Load configuration
+    load_demo_config()
+
+    bucket_name = get_required_env("S3_BUCKET_NAME")
 
     try:
         artifact_service = S3ArtifactService(
             bucket_name=bucket_name,
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region_name=get_optional_env("AWS_REGION", "us-east-1"),
+            aws_access_key_id=get_optional_env("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=get_optional_env("AWS_SECRET_ACCESS_KEY"),
         )
     except Exception as e:
-        print(f"❌ Error initializing S3 service: {e}")
+        print(f"Error initializing S3 service: {e}")
         return
 
-    print("🎮 Interactive S3 Artifact Demo")
+    print("Interactive S3 Artifact Demo")
     print("=" * 40)
     print("Commands:")
     print("  save <filename> <content>")
@@ -285,7 +291,7 @@ async def interactive_demo():
 
     while True:
         try:
-            command = input("📝 > ").strip().split(" ", 2)
+            command = input("> ").strip().split(" ", 2)
 
             if not command or command[0] == "":
                 continue
@@ -293,7 +299,7 @@ async def interactive_demo():
             cmd = command[0].lower()
 
             if cmd == "quit":
-                print("👋 Goodbye!")
+                print("Goodbye!")
                 break
 
             elif cmd == "save" and len(command) >= 3:
@@ -310,7 +316,7 @@ async def interactive_demo():
                     filename=filename,
                     artifact=artifact,
                 )
-                print(f"✓ Saved {filename} as version {version}")
+                print(f"Saved {filename} as version {version}")
 
             elif cmd == "load" and len(command) >= 2:
                 filename = command[1]
@@ -325,21 +331,21 @@ async def interactive_demo():
                 )
 
                 if artifact:
-                    print(f"📄 Content of {filename}:")
+                    print(f"Content of {filename}:")
                     print(artifact.text)
                 else:
-                    print(f"❌ File {filename} not found")
+                    print(f"File {filename} not found")
 
             elif cmd == "list":
                 artifacts = await artifact_service.list_artifact_keys(
                     app_name=app_name, user_id=user_id, session_id=session_id
                 )
                 if artifacts:
-                    print(f"📁 Found {len(artifacts)} files:")
+                    print(f"Found {len(artifacts)} files:")
                     for f in artifacts:
                         print(f"  • {f}")
                 else:
-                    print("📁 No files found")
+                    print("No files found")
 
             elif cmd == "versions" and len(command) >= 2:
                 filename = command[1]
@@ -350,9 +356,9 @@ async def interactive_demo():
                     filename=filename,
                 )
                 if versions:
-                    print(f"📚 Versions of {filename}: {versions}")
+                    print(f"Versions of {filename}: {versions}")
                 else:
-                    print(f"❌ No versions found for {filename}")
+                    print(f"No versions found for {filename}")
 
             elif cmd == "delete" and len(command) >= 2:
                 filename = command[1]
@@ -362,16 +368,16 @@ async def interactive_demo():
                     session_id=session_id,
                     filename=filename,
                 )
-                print(f"✓ Deleted {filename}")
+                print(f"Deleted {filename}")
 
             else:
-                print("❌ Invalid command. Type 'quit' to exit.")
+                print("Invalid command. Type 'quit' to exit.")
 
         except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
+            print("\\nGoodbye!")
             break
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
 
 
 async def main():

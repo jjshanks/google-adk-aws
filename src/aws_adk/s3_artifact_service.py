@@ -448,12 +448,8 @@ class S3ArtifactService(BaseArtifactService):
                     )
 
             # Create and return types.Part
-            # Decode bytes to text for text content types
-            if content_type.startswith("text/"):
-                text_content = content.decode("utf-8")
-                part = types.Part(text=text_content)
-            else:
-                part = types.Part.from_bytes(data=content, mime_type=content_type)
+            # Always use from_bytes to ensure consistent structure with inline_data
+            part = types.Part.from_bytes(data=content, mime_type=content_type)
 
             logger.debug(
                 f"Successfully loaded artifact {filename} version {version} "
@@ -611,6 +607,112 @@ class S3ArtifactService(BaseArtifactService):
         except Exception as e:
             mapped_error = map_boto3_error(e, "list_versions")
             logger.error(f"Failed to list versions for {filename}: {mapped_error}")
+            raise mapped_error
+
+    async def get_security_status(self) -> Dict[str, Any]:
+        """Get bucket security status and recommendations."""
+        try:
+            return self.security_manager.validate_bucket_security()
+        except Exception as e:
+            mapped_error = map_boto3_error(e, "get_security_status")
+            logger.error(f"Failed to get security status: {mapped_error}")
+            raise mapped_error
+
+    async def generate_presigned_url(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filename: str,
+        expiration: int = 3600,
+        version: Optional[int] = None,
+    ) -> str:
+        """Generate a presigned URL for artifact access."""
+        try:
+            # Input validation
+            if self.enable_validation:
+                self.validator.validate_artifact_params(
+                    app_name, user_id, session_id, filename
+                )
+
+            # Determine version if not specified
+            if version is None:
+                versions = await self.list_versions(
+                    app_name=app_name,
+                    user_id=user_id,
+                    session_id=session_id,
+                    filename=filename,
+                )
+                if not versions:
+                    raise S3ValidationError(
+                        message="Artifact not found", error_code="ArtifactNotFound"
+                    )
+                version = max(versions)
+
+            # Generate object key
+            object_key = self.security_manager.generate_secure_object_key(
+                app_name, user_id, session_id, filename, version
+            )
+
+            # Generate presigned URL
+            return self.access_control.generate_presigned_url(
+                s3_client=self.s3_client,
+                bucket_name=self.bucket_name,
+                object_key=object_key,
+                operation="get_object",
+                expiration=expiration,
+            )
+
+        except Exception as e:
+            mapped_error = map_boto3_error(e, "generate_presigned_url")
+            logger.error(
+                f"Failed to generate presigned URL for {filename}: {mapped_error}"
+            )
+            raise mapped_error
+
+    def get_connection_stats(self) -> Dict[str, Any]:
+        """Get connection pool statistics."""
+        return self.connection_pool.get_stats()
+
+    async def batch_delete_artifacts(
+        self,
+        *,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        filenames: list[str],
+    ) -> Dict[str, Any]:
+        """Delete multiple artifacts in batch."""
+        try:
+            # Input validation
+            if self.enable_validation:
+                for filename in filenames:
+                    self.validator.validate_artifact_params(
+                        app_name, user_id, session_id, filename
+                    )
+
+            # Generate object keys for all filenames
+            object_keys = []
+            for filename in filenames:
+                versions = await self.list_versions(
+                    app_name=app_name,
+                    user_id=user_id,
+                    session_id=session_id,
+                    filename=filename,
+                )
+                for version in versions:
+                    object_key = self.security_manager.generate_secure_object_key(
+                        app_name, user_id, session_id, filename, version
+                    )
+                    object_keys.append(object_key)
+
+            # Perform batch delete
+            return await self.batch_operations.batch_delete(object_keys)
+
+        except Exception as e:
+            mapped_error = map_boto3_error(e, "batch_delete_artifacts")
+            logger.error(f"Failed to batch delete artifacts: {mapped_error}")
             raise mapped_error
 
     async def get_service_health(self) -> Dict[str, Any]:
