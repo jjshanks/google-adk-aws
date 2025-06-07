@@ -201,7 +201,6 @@ class S3ArtifactService(BaseArtifactService):
                 f"in {operation_time:.2f}s"
             )
 
-    @with_retry()
     async def save_artifact(
         self,
         *,
@@ -213,19 +212,32 @@ class S3ArtifactService(BaseArtifactService):
     ) -> int:
         """Save artifact with comprehensive error handling and edge case management."""
 
-        async with self._operation_context(
-            "save", app_name, user_id, session_id, filename
-        ) as context:
-            app_name, user_id, session_id, filename = context["sanitized_params"]
+        async def _save() -> int:
+            async with self._operation_context(
+                "save", app_name, user_id, session_id, filename
+            ) as context:
+                (
+                    sanitized_app,
+                    sanitized_user,
+                    sanitized_session,
+                    sanitized_file,
+                ) = context["sanitized_params"]
 
-            @self.write_circuit_breaker
-            async def _save_with_protection() -> int:
-                return await self._save_artifact_impl(
-                    app_name, user_id, session_id, filename, artifact
-                )
+                @self.write_circuit_breaker
+                async def _save_with_protection() -> int:
+                    return await self._save_artifact_impl(
+                        sanitized_app,
+                        sanitized_user,
+                        sanitized_session,
+                        sanitized_file,
+                        artifact,
+                    )
 
-            result = await _save_with_protection()
-            return cast(int, result)
+                result = await _save_with_protection()
+                return cast(int, result)
+
+        result = await with_retry(self.retry_config)(_save)()
+        return cast(int, result)
 
     async def _save_artifact_impl(
         self,
@@ -326,7 +338,6 @@ class S3ArtifactService(BaseArtifactService):
             logger.error(f"Failed to save artifact {filename}: {mapped_error}")
             raise mapped_error
 
-    @with_retry()
     async def load_artifact(
         self,
         *,
@@ -338,19 +349,32 @@ class S3ArtifactService(BaseArtifactService):
     ) -> Optional[types.Part]:
         """Load artifact with comprehensive error handling."""
 
-        async with self._operation_context(
-            "load", app_name, user_id, session_id, filename
-        ) as context:
-            app_name, user_id, session_id, filename = context["sanitized_params"]
+        async def _load() -> Optional[types.Part]:
+            async with self._operation_context(
+                "load", app_name, user_id, session_id, filename
+            ) as context:
+                (
+                    sanitized_app,
+                    sanitized_user,
+                    sanitized_session,
+                    sanitized_file,
+                ) = context["sanitized_params"]
 
-            @self.read_circuit_breaker
-            async def _load_with_protection() -> Optional[types.Part]:
-                return await self._load_artifact_impl(
-                    app_name, user_id, session_id, filename, version
-                )
+                @self.read_circuit_breaker
+                async def _load_with_protection() -> Optional[types.Part]:
+                    return await self._load_artifact_impl(
+                        sanitized_app,
+                        sanitized_user,
+                        sanitized_session,
+                        sanitized_file,
+                        version,
+                    )
 
-            result = await _load_with_protection()
-            return cast(Optional[types.Part], result)
+                result = await _load_with_protection()
+                return cast(Optional[types.Part], result)
+
+        result = await with_retry(self.retry_config)(_load)()
+        return cast(Optional[types.Part], result)
 
     async def _load_artifact_impl(
         self,
