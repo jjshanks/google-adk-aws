@@ -35,7 +35,11 @@ class RetryContext:
 
 
 class RetryConfig:
-    """Enhanced retry configuration with operation-specific settings."""
+    """Enhanced retry configuration with operation-specific settings.
+
+    Provides comprehensive retry behavior configuration including multiple backoff
+    strategies, time constraints, and error filtering.
+    """
 
     def __init__(
         self,
@@ -46,8 +50,27 @@ class RetryConfig:
         jitter: bool = True,
         retryable_errors: Optional[Tuple[Type[Exception], ...]] = None,
         max_total_time: Optional[float] = None,
-        backoff_strategy: str = "exponential",  # exponential, linear, fixed
+        backoff_strategy: str = "exponential",
     ):
+        """Initialize retry configuration.
+
+        Args:
+            max_attempts: Maximum number of retry attempts before giving up
+            base_delay: Base delay in seconds for retry calculations
+            max_delay: Maximum delay in seconds between retries
+            exponential_base: Base for exponential backoff calculation
+            jitter: Whether to apply random jitter (±50%) to delay times
+            retryable_errors: Tuple of exception types that should trigger retries
+            max_total_time: Maximum total time in seconds for all retry attempts.
+                If specified, retries will stop when this time limit is exceeded,
+                even if max_attempts hasn't been reached. When None, only
+                max_attempts limits retries.
+            backoff_strategy: Strategy for calculating retry delays. Supported values:
+                - "exponential": delay = base_delay * (exponential_base ** attempt)
+                - "linear": delay = base_delay * (attempt + 1)
+                - "fixed": delay = base_delay (constant delay)
+                All strategies respect max_delay as an upper bound.
+        """
         self.max_attempts = max_attempts
         self.base_delay = base_delay
         self.max_delay = max_delay
@@ -63,7 +86,18 @@ class RetryConfig:
         )
 
     def calculate_delay(self, attempt: int, context: RetryContext) -> float:
-        """Calculate delay for next retry attempt."""
+        """Calculate delay for next retry attempt.
+
+        Uses the configured backoff strategy to determine delay, applies jitter
+        if enabled, and respects both max_delay and max_total_time constraints.
+
+        Args:
+            attempt: Current attempt number (0-based)
+            context: Retry context with timing information
+
+        Returns:
+            Delay in seconds before next retry attempt (>= 0)
+        """
         if self.backoff_strategy == "exponential":
             delay = self.base_delay * (self.exponential_base**attempt)
         elif self.backoff_strategy == "linear":
@@ -86,7 +120,18 @@ class RetryConfig:
         return max(0, delay)
 
     def should_retry(self, error: Exception, context: RetryContext) -> bool:
-        """Determine if error should trigger retry."""
+        """Determine if error should trigger retry.
+
+        Checks if the error type is retryable, if max_attempts limit hasn't been
+        reached, and if max_total_time constraint hasn't been exceeded.
+
+        Args:
+            error: Exception that occurred during operation
+            context: Retry context with attempt count and timing information
+
+        Returns:
+            True if retry should be attempted, False otherwise
+        """
         # Check attempt limit
         if context.attempt >= self.max_attempts:
             return False
