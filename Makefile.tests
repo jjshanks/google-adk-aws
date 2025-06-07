@@ -1,0 +1,231 @@
+# Test automation Makefile for S3ArtifactService
+# Use this file for convenient test execution during development
+
+.PHONY: help test-quick test-coverage test-performance test-integration test-security test-comprehensive test-all lint format clean install-dev setup-env
+
+# Default target
+help:
+	@echo "S3ArtifactService Test Automation"
+	@echo "=================================="
+	@echo ""
+	@echo "Available targets:"
+	@echo "  test-quick        - Run quick unit tests (fast feedback)"
+	@echo "  test-coverage     - Run tests with coverage reporting"
+	@echo "  test-performance  - Run performance benchmarks"
+	@echo "  test-integration  - Run integration tests (requires LocalStack)"
+	@echo "  test-security     - Run security scans"
+	@echo "  test-comprehensive - Run comprehensive test suite with reporting"
+	@echo "  test-all          - Run all test categories sequentially"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  lint              - Run linting and type checking"
+	@echo "  format            - Format code with ruff"
+	@echo "  format-check      - Check code formatting"
+	@echo ""
+	@echo "Environment:"
+	@echo "  install-dev       - Install development dependencies"
+	@echo "  setup-env         - Setup test environment"
+	@echo "  clean             - Clean up test artifacts"
+	@echo ""
+	@echo "LocalStack:"
+	@echo "  start-localstack  - Start LocalStack for integration tests"
+	@echo "  stop-localstack   - Stop LocalStack"
+	@echo ""
+
+# Quick tests for development feedback
+test-quick:
+	@echo "🚀 Running quick unit tests..."
+	python tests/automation/run_tests.py quick
+
+# Coverage testing
+test-coverage:
+	@echo "📊 Running tests with coverage..."
+	python tests/automation/run_tests.py coverage
+
+# Performance testing
+test-performance:
+	@echo "⚡ Running performance tests..."
+	python tests/automation/run_tests.py performance
+
+# Integration testing
+test-integration:
+	@echo "🔗 Running integration tests..."
+	python tests/automation/run_tests.py integration
+
+# Security scanning
+test-security:
+	@echo "🔒 Running security scans..."
+	python tests/automation/run_tests.py security
+
+# Comprehensive test suite
+test-comprehensive:
+	@echo "🧪 Running comprehensive test suite..."
+	python tests/automation/run_tests.py comprehensive
+
+# All tests
+test-all:
+	@echo "🎯 Running all test categories..."
+	python tests/automation/run_tests.py all
+
+# Linting and type checking
+lint:
+	@echo "🔍 Running linting and type checking..."
+	python tests/automation/run_tests.py lint
+
+# Format code
+format:
+	@echo "✨ Formatting code..."
+	ruff format src/ tests/
+	@echo "✅ Code formatted"
+
+# Check formatting
+format-check:
+	@echo "🔍 Checking code formatting..."
+	ruff format --check src/ tests/
+
+# Install development dependencies
+install-dev:
+	@echo "📦 Installing development dependencies..."
+	pip install -e ".[dev,test]"
+	pip install pytest-json-report pytest-cov pytest-timeout pytest-xdist pytest-benchmark
+	pip install bandit safety ruff mypy
+	@echo "✅ Development dependencies installed"
+
+# Setup test environment
+setup-env:
+	@echo "🔧 Setting up test environment..."
+	python tests/automation/test_config.py setup --environment unit-core
+	@echo "✅ Test environment ready"
+
+# Clean up test artifacts
+clean:
+	@echo "🧹 Cleaning up test artifacts..."
+	rm -rf .pytest_cache/
+	rm -rf htmlcov/
+	rm -rf .coverage
+	rm -f coverage.xml
+	rm -f coverage.json
+	rm -f comprehensive_test_report.json
+	rm -f comprehensive_test_report.html
+	rm -f test_results_*.json
+	rm -f bandit-report.json
+	rm -f safety-report.json
+	rm -rf .benchmarks/
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
+	@echo "✅ Cleanup complete"
+
+# LocalStack management
+start-localstack:
+	@echo "🐳 Starting LocalStack..."
+	@if ! docker ps | grep -q localstack; then \
+		echo "Starting LocalStack container..."; \
+		docker run -d --name localstack-test -p 4566:4566 \
+			-e SERVICES=s3 \
+			-e DEBUG=1 \
+			localstack/localstack:latest; \
+		echo "Waiting for LocalStack to be ready..."; \
+		timeout 60 bash -c 'until curl -f http://localhost:4566/_localstack/health >/dev/null 2>&1; do sleep 2; done'; \
+		echo "✅ LocalStack is ready"; \
+	else \
+		echo "LocalStack is already running"; \
+	fi
+
+stop-localstack:
+	@echo "🛑 Stopping LocalStack..."
+	@if docker ps | grep -q localstack-test; then \
+		docker stop localstack-test; \
+		docker rm localstack-test; \
+		echo "✅ LocalStack stopped"; \
+	else \
+		echo "LocalStack is not running"; \
+	fi
+
+# Development workflow targets
+dev-setup: install-dev setup-env
+	@echo "🎉 Development environment ready!"
+
+dev-test: test-quick lint
+	@echo "🎯 Quick development tests complete"
+
+pre-commit: format lint test-coverage
+	@echo "✅ Pre-commit checks passed"
+
+pre-push: test-all
+	@echo "🚀 Pre-push validation complete"
+
+# CI/CD simulation
+ci-unit:
+	@echo "🤖 Simulating CI unit tests..."
+	python -m pytest tests/unit/ -v --tb=short --strict-markers --strict-config \
+		--cov=aws_adk --cov-report=xml --cov-fail-under=90 \
+		-m "not slow and not performance"
+
+ci-integration:
+	@echo "🤖 Simulating CI integration tests..."
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1 \
+	S3_ENDPOINT_URL=http://localhost:4566 \
+	python -m pytest tests/integration/ -v --tb=short
+
+ci-performance:
+	@echo "🤖 Simulating CI performance tests..."
+	python -m pytest tests/unit/test_performance_comprehensive.py -v \
+		-m performance --tb=short
+
+# Quality gates
+quality-check:
+	@echo "🚦 Running quality gates..."
+	@python tests/automation/test_config.py validate --environment unit-core
+	@echo "✅ Quality gates passed"
+
+# Reporting
+generate-reports: test-comprehensive
+	@echo "📄 Test reports generated:"
+	@echo "  📊 HTML: comprehensive_test_report.html"
+	@echo "  📋 JSON: comprehensive_test_report.json"
+	@if [ -f htmlcov/index.html ]; then \
+		echo "  📈 Coverage: htmlcov/index.html"; \
+	fi
+
+# Docker-based testing
+test-docker:
+	@echo "🐳 Running tests in Docker..."
+	docker run --rm -v $(PWD):/workspace -w /workspace \
+		python:3.11-slim bash -c " \
+		pip install -e .[dev,test] && \
+		python tests/automation/run_tests.py quick"
+
+# Watch mode for development
+test-watch:
+	@echo "👀 Starting test watch mode..."
+	@echo "  Watching for changes in src/ and tests/"
+	@echo "  Press Ctrl+C to stop"
+	while inotifywait -qqr -e modify src/ tests/ 2>/dev/null; do \
+		echo ""; \
+		echo "🔄 Changes detected, running quick tests..."; \
+		make test-quick; \
+		echo "⏰ Waiting for changes..."; \
+	done || echo "⚠️  inotifywait not available, install inotify-tools for watch mode"
+
+# Benchmark comparison
+benchmark-compare:
+	@echo "📊 Running benchmark comparison..."
+	python -m pytest tests/unit/test_performance_comprehensive.py \
+		--benchmark-compare --benchmark-compare-fail=mean:5%
+
+# Documentation testing
+test-docs:
+	@echo "📚 Testing documentation examples..."
+	python -m doctest src/aws_adk/*.py
+	@echo "✅ Documentation tests passed"
+
+# Memory profiling
+profile-memory:
+	@echo "🧠 Running memory profiling..."
+	python -m pytest tests/unit/test_performance_comprehensive.py::TestConcurrencyPerformance::test_memory_usage_under_load \
+		--tb=short -s
+
+# Full validation pipeline
+validate-all: clean install-dev setup-env lint format-check test-all security generate-reports
+	@echo "🎉 Full validation pipeline complete!"
+	@echo "📊 Check comprehensive_test_report.html for detailed results"
