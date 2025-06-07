@@ -19,7 +19,12 @@ from .edge_case_handlers import (
     get_large_file_handler,
     get_network_failure_handler,
 )
-from .exceptions import S3CorruptionError, S3ValidationError, map_boto3_error
+from .exceptions import (
+    S3ConnectionError,
+    S3CorruptionError,
+    S3ValidationError,
+    map_boto3_error,
+)
 from .retry_handler import CircuitBreaker, RetryConfig, with_retry
 from .security import AccessControlManager, S3SecurityManager
 from .validation import get_validator
@@ -77,11 +82,11 @@ class S3ArtifactService(BaseArtifactService):
 
         # Circuit breakers for different operation types
         self.read_circuit_breaker = CircuitBreaker(
-            failure_threshold=5, timeout=30.0, expected_exception=Exception
+            failure_threshold=5, timeout=30.0, expected_exception=S3ConnectionError
         )
 
         self.write_circuit_breaker = CircuitBreaker(
-            failure_threshold=3, timeout=60.0, expected_exception=Exception
+            failure_threshold=3, timeout=60.0, expected_exception=S3ConnectionError
         )
 
         # Initialize S3 client and components
