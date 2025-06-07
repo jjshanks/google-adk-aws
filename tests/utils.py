@@ -337,6 +337,8 @@ class TestMetricsCollector:
             "performance_measurements": {},
             "coverage_areas": set(),
         }
+        self.error_count = 0
+        self.error_types = set()
 
     def record_test_result(self, test_name: str, passed: bool, categories: List[str]):
         """Record test execution result."""
