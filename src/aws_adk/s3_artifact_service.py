@@ -19,7 +19,7 @@ from .exceptions import (
     S3PermissionError,
     S3ThrottleError,
 )
-from .retry_handler import CircuitBreaker, RetryConfig, is_throttle_error, with_retry
+from .retry_handler import CircuitBreaker, RetryConfig, with_retry
 from .security import AccessControlManager, EncryptionManager, S3SecurityManager
 
 logger = logging.getLogger(__name__)
@@ -144,7 +144,12 @@ class S3ArtifactService(BaseArtifactService):
                 raise S3PermissionError(f"Access denied for {operation}") from error
             elif error_code == "NoSuchKey":
                 raise S3ArtifactNotFoundError("Artifact not found") from error
-            elif is_throttle_error(error):
+            elif error_code in [
+                "Throttling",
+                "RequestLimitExceeded",
+                "TooManyRequests",
+                "SlowDown",
+            ]:
                 raise S3ThrottleError(f"S3 throttling during {operation}") from error
             elif error_code in ["InternalError", "ServiceUnavailable"]:
                 raise S3ConnectionError(
@@ -317,7 +322,7 @@ class S3ArtifactService(BaseArtifactService):
         """
 
         @self.write_circuit_breaker
-        @with_retry(self.retry_config)  # type: ignore[misc]
+        @with_retry(self.retry_config)
         async def _save_with_protection() -> int:
             try:
                 # Determine next version
@@ -459,7 +464,7 @@ class S3ArtifactService(BaseArtifactService):
         """
 
         @self.read_circuit_breaker
-        @with_retry(self.retry_config)  # type: ignore[misc]
+        @with_retry(self.retry_config)
         async def _load_with_protection() -> types.Part | None:
             try:
                 # Resolve version to load
@@ -625,9 +630,7 @@ class S3ArtifactService(BaseArtifactService):
                 # Use empty string for version to get prefix
                 prefix = self._get_object_key(
                     app_name, user_id, session_id, filename, 0
-                ).rsplit("/", 1)[
-                    0
-                ]  # Remove last path segment robustly
+                ).rsplit("/", 1)[0]  # Remove last path segment robustly
 
                 paginator = self.s3_client.get_paginator("list_objects_v2")
                 versions = []
