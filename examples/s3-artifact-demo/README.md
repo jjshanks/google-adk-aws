@@ -28,6 +28,13 @@ The S3ArtifactService provides:
 - **Monitoring**: Security assessments and performance metrics
 - **Large File Support**: Multipart uploads for files over 100MB
 
+### Phase 3 Error Handling & Edge Cases
+- **Comprehensive Exception Framework**: Automatic boto3 error mapping with rich context
+- **Input Validation & Sanitization**: Security checks and content validation
+- **Edge Case Management**: Large file handling, concurrency control, network failure recovery
+- **Service Health Monitoring**: Circuit breaker states and performance metrics
+- **Content Integrity Verification**: Corruption detection and hash validation
+
 ## Prerequisites
 
 1. **AWS Account** with S3 access
@@ -102,6 +109,11 @@ S3_ENCRYPTION_KEY=your-32-char-key     # Custom encryption key (optional)
 S3_RETRY_MAX_ATTEMPTS=5                # Maximum retry attempts
 S3_RETRY_BASE_DELAY=1.0                # Base delay between retries (seconds)
 S3_RETRY_MAX_DELAY=30.0                # Maximum delay between retries (seconds)
+
+# Phase 3 Error Handling & Validation (Optional)
+S3_ENABLE_VALIDATION=true              # Enable input validation and sanitization
+S3_ENABLE_SECURITY_CHECKS=true         # Enable security validation
+S3_ENABLE_INTEGRITY_CHECKS=true        # Enable content integrity verification
 ```
 
 ### IAM Permissions
@@ -142,6 +154,9 @@ artifact_service = S3ArtifactService(
     bucket_name="my-bucket",
     region_name="us-east-1",
     enable_encryption=True,  # Enable client-side encryption
+    enable_validation=True,  # Enable input validation and sanitization
+    enable_security_checks=True,  # Enable security validation
+    enable_integrity_checks=True,  # Enable content integrity verification
     retry_config=RetryConfig(max_attempts=5, base_delay=1.0)
 )
 
@@ -224,7 +239,7 @@ agent = create_s3_agent()
 
 ### Error Handling
 
-Phase 2 includes comprehensive error handling with specific exception types:
+Phase 3 includes comprehensive error handling with specific exception types:
 
 - `S3ConnectionError`: Network or authentication issues
 - `S3PermissionError`: Insufficient IAM permissions
@@ -232,9 +247,18 @@ Phase 2 includes comprehensive error handling with specific exception types:
 - `S3ThrottleError`: Rate limiting and throttling issues
 - `S3ArtifactNotFoundError`: Requested artifact doesn't exist
 - `S3ObjectError`: General object operation failures
+- `S3ValidationError`: Input validation and content validation failures
+- `S3ConcurrencyError`: Concurrent operation conflicts
+- `S3CorruptionError`: Data corruption and integrity errors
+- `S3StorageQuotaError`: Storage quota and capacity errors
 - `S3ArtifactError`: Base exception for all S3 operations
 
-All operations include automatic retry logic with exponential backoff and circuit breaker protection.
+All operations include:
+- Automatic retry logic with exponential backoff and circuit breaker protection
+- Input validation and sanitization for security
+- Content integrity verification and corruption detection
+- Concurrency control and conflict resolution
+- Service health monitoring and graceful degradation
 
 ## Testing
 
