@@ -117,3 +117,7 @@ target-version = "py310"
 
 [tool.ruff.lint]
 extend-ignore = ["E203"]
+select = ["E", "F", "I"]  # Enable import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["aws_adk"]

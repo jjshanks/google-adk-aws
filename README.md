@@ -19,6 +19,9 @@ AWS service integrations for Google Agent Development Kit (ADK).
 - **Enterprise-Grade Reliability**: Advanced error handling, retry logic, and circuit breakers
 - **Performance Optimized**: Connection pooling, batch operations, and multipart uploads
 - **Security Hardened**: Client-side encryption, integrity verification, and presigned URLs
+- **Comprehensive Error Handling**: Robust exception hierarchy with automatic boto3 error mapping
+- **Edge Case Management**: Large file support, concurrency control, and network failure recovery
+- **Input Validation & Security**: Sanitization, path traversal protection, and content validation
 - **AWS S3 Integration**: Production-ready S3 storage with comprehensive authentication
 - **Flexible Authentication**: Support for IAM roles, access keys, and custom endpoints
 - **Version Management**: Automatic artifact versioning with history tracking
@@ -50,6 +53,9 @@ artifact_service = S3ArtifactService(
     bucket_name="my-artifacts-bucket",
     region_name="us-west-2",
     enable_encryption=True,  # Enable client-side encryption
+    enable_validation=True,  # Enable input validation and sanitization
+    enable_security_checks=True,  # Enable security validation
+    enable_integrity_checks=True,  # Enable content integrity verification
     retry_config=RetryConfig(max_attempts=5, base_delay=1.0)
 )
 
@@ -64,22 +70,41 @@ agent = Agent(
 ### Advanced Features
 
 ```python
-from aws_adk import S3ArtifactService, S3ArtifactError
+from aws_adk import S3ArtifactService, S3ValidationError, RetryConfig
 
-# Production configuration
+# Production configuration with comprehensive error handling
 service = S3ArtifactService(
     bucket_name="production-artifacts",
     enable_encryption=True,
-    encryption_key="your-encryption-key"  # Optional custom key
+    enable_validation=True,  # Input validation and sanitization
+    enable_security_checks=True,  # Security validation
+    enable_integrity_checks=True,  # Content integrity verification
+    retry_config=RetryConfig(
+        max_attempts=5,
+        base_delay=1.0,
+        max_delay=60.0,
+        backoff_strategy="exponential"
+    )
 )
 
-# Security monitoring
-security_status = await service.get_security_status()
-print(f"Encryption enabled: {security_status['encryption']}")
+# Service health monitoring
+health = await service.get_service_health()
+print(f"Validation enabled: {health['feature_flags']['validation']}")
+print(f"Circuit breaker status: {health['circuit_breaker_stats']['read']['state']}")
 
 # Performance monitoring
 stats = service.get_connection_stats()
 print(f"Active connections: {stats['active_connections']}")
+
+# Comprehensive error handling
+try:
+    version = await service.save_artifact(
+        app_name="app", user_id="user", session_id="session",
+        filename="document.pdf", artifact=artifact
+    )
+except S3ValidationError as e:
+    print(f"Validation failed: {e.message}")
+    print(f"Error context: {e.context}")
 
 # Batch operations for efficiency
 await service.batch_delete_artifacts(
@@ -115,6 +140,14 @@ Available at [`examples/phase2_features_demo.py`](examples/phase2_features_demo.
 - **Monitoring**: Security assessments and performance metrics
 - **Error Handling**: Retry logic and circuit breaker demonstrations
 
+#### Phase 3 Error Handling & Edge Cases Demo
+Available at [`examples/phase3_error_handling_demo.py`](examples/phase3_error_handling_demo.py):
+
+- **Robust Exception Framework**: Automatic boto3 error mapping and rich context
+- **Input Validation**: Sanitization, security checks, and content validation
+- **Edge Case Handling**: Large files, concurrency control, network failures
+- **Service Health Monitoring**: Circuit breaker states and performance metrics
+
 Features demonstrated:
 - Basic save/load/delete operations with enhanced reliability
 - Automatic versioning and version management
@@ -124,6 +157,12 @@ Features demonstrated:
 - Security monitoring and recommendations
 - Performance optimization features
 - Comprehensive error handling and recovery
+- Input validation and sanitization
+- Large file handling with multipart uploads
+- Concurrency control and conflict resolution
+- Network failure detection and recovery
+- Circuit breaker patterns for fault tolerance
+- Content integrity verification
 - Agent tool integration patterns
 
 ## Development
@@ -173,6 +212,16 @@ make help
 - [x] Production monitoring and diagnostics
 - [x] Integration tests with real S3 operations
 - [x] Large file support with multipart uploads
+
+✅ **Phase 3 - Error Handling and Edge Cases** (Complete)
+- [x] Comprehensive exception hierarchy with automatic boto3 error mapping
+- [x] Input validation and sanitization framework with security checks
+- [x] Edge case handlers for large files, concurrency, and network failures
+- [x] Enhanced S3ArtifactService integration with all error handling
+- [x] Circuit breaker patterns and retry logic with exponential backoff
+- [x] Content integrity verification and corruption detection
+- [x] Service health monitoring and resource cleanup
+- [x] Production-ready fault tolerance and graceful degradation
 
 🔮 **Future Phases - Additional AWS Services**
 - [ ] DynamoDB integrations
