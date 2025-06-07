@@ -450,8 +450,7 @@ def create_s3_agent() -> Agent:
         global_instruction=GLOBAL_INSTRUCTION,
         instruction=MAIN_INSTRUCTION,
         tools=[save_user_data, load_user_data, list_user_files, get_file_versions],
-        artifact_service=artifact_service,
-        generate_config=GenerateContentConfig(
+        generate_content_config=GenerateContentConfig(
             temperature=0.1,
             max_output_tokens=8192,
         ),
@@ -483,27 +482,32 @@ async def main():
         # Simple interactive loop (you could use ADK runners for more
         # sophisticated interaction)
         while True:
-            user_input = input("You: ").strip()
+            try:
+                user_input = input("You: ").strip()
 
-            if user_input.lower() in ["quit", "exit", "bye"]:
-                print("Goodbye!")
+                if user_input.lower() in ["quit", "exit", "bye"]:
+                    print("Goodbye!")
+                    break
+
+                if not user_input:
+                    continue
+
+                # For demo purposes, we'll simulate a simple agent response
+                # In a real implementation, you'd use ADK runners for proper
+                # conversation flow
+                print(
+                    "Agent: I'm ready to help with file operations! "
+                    "(This is a simplified demo)"
+                )
+                print(
+                    "       Use the Google ADK runners for full conversation "
+                    "capabilities."
+                )
+                print()
+            except EOFError:
+                print("\nDemo completed successfully!")
+                print("Agent created and ready to use with Google ADK runners.")
                 break
-
-            if not user_input:
-                continue
-
-            # For demo purposes, we'll simulate a simple agent response
-            # In a real implementation, you'd use ADK runners for proper
-            # conversation flow
-            print(
-                "Agent: I'm ready to help with file operations! "
-                "(This is a simplified demo)"
-            )
-            print(
-                "       Use the Google ADK runners for full conversation "
-                "capabilities."
-            )
-            print()
 
     except Exception as e:
         logger.error(f"Demo failed: {e}")
