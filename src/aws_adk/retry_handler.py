@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-import random
+import secrets
 import time
 from dataclasses import dataclass
 from functools import wraps
@@ -110,7 +110,7 @@ class RetryConfig:
 
         # Apply jitter to prevent thundering herd
         if self.jitter:
-            delay *= 0.5 + random.random() * 0.5
+            delay *= 0.5 + secrets.SystemRandom().random() * 0.5
 
         # Check total time constraint
         if self.max_total_time:

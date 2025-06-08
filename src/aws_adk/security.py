@@ -159,7 +159,7 @@ class S3SecurityManager:
         if algorithm == "sha256":
             return hashlib.sha256(content).hexdigest()
         elif algorithm == "md5":
-            return hashlib.md5(content).hexdigest()
+            return hashlib.md5(content, usedforsecurity=False).hexdigest()
         else:
             raise ValueError(f"Unsupported hash algorithm: {algorithm}")
 

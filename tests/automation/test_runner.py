@@ -10,10 +10,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
+from tests.utils import TestMetricsCollector
+
 # Add project root to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from tests.utils import TestMetricsCollector
 
 
 @dataclass
@@ -121,7 +121,10 @@ class ComprehensiveTestRunner:
             "--cov=aws_adk",
             "--cov-report=json",
             "--json-report",
-            f"--json-report-file=test_results_{suite.name.replace(' ', '_').lower()}.json",
+            (
+                f"--json-report-file="
+                f"test_results_{suite.name.replace(' ', '_').lower()}.json"
+            ),
         ]
 
         # Add markers
@@ -248,7 +251,8 @@ class ComprehensiveTestRunner:
             if os.path.exists("coverage.json"):
                 with open("coverage.json", "r") as f:
                     coverage_data = json.load(f)
-                return coverage_data.get("totals", {}).get("percent_covered", 0.0)
+                totals = coverage_data.get("totals", {})
+                return float(totals.get("percent_covered", 0.0))
         except Exception:
             pass
         return 0.0
@@ -356,7 +360,6 @@ class ComprehensiveTestRunner:
         """Generate recommendations based on test results."""
         recommendations = []
 
-        total_tests = sum(r.total_tests for r in self.test_results)
         total_failed = sum(r.failed for r in self.test_results)
 
         if total_failed > 0:
@@ -383,7 +386,8 @@ class ComprehensiveTestRunner:
         error_scenarios = sum(r.error_scenarios_tested for r in self.test_results)
         if error_scenarios < 50:
             recommendations.append(
-                f"Add more error scenario tests (current: {error_scenarios}, target: 50+)"
+                f"Add more error scenario tests "
+                f"(current: {error_scenarios}, target: 50+)"
             )
 
         edge_cases = sum(r.edge_cases_tested for r in self.test_results)
@@ -394,7 +398,7 @@ class ComprehensiveTestRunner:
 
         return recommendations
 
-    async def save_reports(self, report: Dict[str, Any]):
+    async def save_reports(self, report: Dict[str, Any]) -> None:
         """Save comprehensive reports."""
         # Save JSON report
         with open("comprehensive_test_report.json", "w") as f:
@@ -535,7 +539,11 @@ class ComprehensiveTestRunner:
 
         <div class="summary">
             <div class="metric">
-                <div class="metric-value {'success' if summary['success_rate'] >= 0.95 else 'warning' if summary['success_rate'] >= 0.8 else 'danger'}">{summary['success_rate']:.1%}</div>
+                <div class="metric-value {
+                    'success' if summary['success_rate'] >= 0.95
+                    else 'warning' if summary['success_rate'] >= 0.8
+                    else 'danger'
+                }">{summary['success_rate']:.1%}</div>
                 <div class="metric-label">Success Rate</div>
             </div>
             <div class="metric">
@@ -547,7 +555,9 @@ class ComprehensiveTestRunner:
                 <div class="metric-label">Passed</div>
             </div>
             <div class="metric">
-                <div class="metric-value {'danger' if summary['failed'] > 0 else 'success'}">{summary['failed']}</div>
+                <div class="metric-value {
+                    'danger' if summary['failed'] > 0 else 'success'
+                }">{summary['failed']}</div>
                 <div class="metric-label">Failed</div>
             </div>
             <div class="metric">
@@ -555,7 +565,11 @@ class ComprehensiveTestRunner:
                 <div class="metric-label">Skipped</div>
             </div>
             <div class="metric">
-                <div class="metric-value {'success' if summary['average_coverage'] >= 95 else 'warning' if summary['average_coverage'] >= 80 else 'danger'}">{summary['average_coverage']:.1f}%</div>
+                <div class="metric-value {
+                    'success' if summary['average_coverage'] >= 95
+                    else 'warning' if summary['average_coverage'] >= 80
+                    else 'danger'
+                }">{summary['average_coverage']:.1f}%</div>
                 <div class="metric-label">Coverage</div>
             </div>
             <div class="metric">
@@ -569,17 +583,33 @@ class ComprehensiveTestRunner:
         </div>
 
         <div class="quality-indicators">
-            <div class="indicator {'pass' if quality_metrics['comprehensive_coverage'] else 'fail'}">
-                {'✓' if quality_metrics['comprehensive_coverage'] else '✗'} Comprehensive Coverage (95%+)
+            <div class="indicator {
+                'pass' if quality_metrics['comprehensive_coverage'] else 'fail'
+            }">
+                {
+                    '✓' if quality_metrics['comprehensive_coverage'] else '✗'
+                } Comprehensive Coverage (95%+)
             </div>
-            <div class="indicator {'pass' if quality_metrics['error_handling_coverage'] else 'fail'}">
-                {'✓' if quality_metrics['error_handling_coverage'] else '✗'} Error Handling Coverage (50+ scenarios)
+            <div class="indicator {
+                'pass' if quality_metrics['error_handling_coverage'] else 'fail'
+            }">
+                {
+                    '✓' if quality_metrics['error_handling_coverage'] else '✗'
+                } Error Handling Coverage (50+ scenarios)
             </div>
-            <div class="indicator {'pass' if quality_metrics['edge_case_coverage'] else 'fail'}">
-                {'✓' if quality_metrics['edge_case_coverage'] else '✗'} Edge Case Coverage (30+ cases)
+            <div class="indicator {
+                'pass' if quality_metrics['edge_case_coverage'] else 'fail'
+            }">
+                {
+                    '✓' if quality_metrics['edge_case_coverage'] else '✗'
+                } Edge Case Coverage (30+ cases)
             </div>
-            <div class="indicator {'pass' if quality_metrics['performance_validated'] else 'fail'}">
-                {'✓' if quality_metrics['performance_validated'] else '✗'} Performance Validated
+            <div class="indicator {
+                'pass' if quality_metrics['performance_validated'] else 'fail'
+            }">
+                {
+                    '✓' if quality_metrics['performance_validated'] else '✗'
+                } Performance Validated
             </div>
         </div>
 
@@ -634,7 +664,7 @@ class ComprehensiveTestRunner:
         return html
 
 
-async def main():
+async def main() -> None:
     """Main test runner entry point."""
     project_root = Path(__file__).parent.parent.parent
     runner = ComprehensiveTestRunner(project_root)
