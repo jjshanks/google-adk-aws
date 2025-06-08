@@ -62,21 +62,29 @@ class TestReportGenerator:
         executive_summary = f"""
 # S3ArtifactService Test Executive Summary
 
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 ## Overall Health Score: {health_score:.0f}/100
 
 ### Key Metrics
-- **Success Rate:** {summary['success_rate']:.1%}
-- **Test Coverage:** {summary['average_coverage']:.1f}%
-- **Total Tests Executed:** {summary['total_tests']}
-- **Execution Time:** {summary['overall_duration']:.1f} seconds
+- **Success Rate:** {summary["success_rate"]:.1%}
+- **Test Coverage:** {summary["average_coverage"]:.1f}%
+- **Total Tests Executed:** {summary["total_tests"]}
+- **Execution Time:** {summary["overall_duration"]:.1f} seconds
 
 ### Quality Indicators
-- ✅ Comprehensive Coverage: {'Yes' if quality_metrics['comprehensive_coverage'] else 'No'}
-- ✅ Error Handling: {'Robust' if quality_metrics['error_handling_coverage'] else 'Needs Improvement'}
-- ✅ Edge Case Testing: {'Complete' if quality_metrics['edge_case_coverage'] else 'Incomplete'}
-- ✅ Performance Validated: {'Yes' if quality_metrics['performance_validated'] else 'No'}
+- ✅ Comprehensive Coverage: {
+    "Yes" if quality_metrics["comprehensive_coverage"] else "No"
+}
+- ✅ Error Handling: {
+    "Robust" if quality_metrics["error_handling_coverage"] else "Needs Improvement"
+}
+- ✅ Edge Case Testing: {
+    "Complete" if quality_metrics["edge_case_coverage"] else "Incomplete"
+}
+- ✅ Performance Validated: {
+    "Yes" if quality_metrics["performance_validated"] else "No"
+}
 
 ### Risk Assessment
 """
@@ -88,16 +96,21 @@ class TestReportGenerator:
 
         if summary["average_coverage"] < 90:
             risks.append(
-                f"🟡 **MEDIUM RISK:** Test coverage below 90% ({summary['average_coverage']:.1f}%)"
+                f"🟡 **MEDIUM RISK:** Test coverage below 90% "
+                f"({summary['average_coverage']:.1f}%)"
             )
 
         if summary["error_scenarios_tested"] < 30:
             risks.append(
-                f"🟡 **MEDIUM RISK:** Limited error scenario coverage ({summary['error_scenarios_tested']} scenarios)"
+                f"🟡 **MEDIUM RISK:** Limited error scenario coverage "
+                f"({summary['error_scenarios_tested']} scenarios)"
             )
 
         if not risks:
-            executive_summary += "🟢 **LOW RISK:** All quality metrics are within acceptable thresholds.\n"
+            executive_summary += (
+                "🟢 **LOW RISK:** All quality metrics are within "
+                "acceptable thresholds.\n"
+            )
         else:
             executive_summary += "\n".join(risks) + "\n"
 
@@ -109,9 +122,14 @@ class TestReportGenerator:
 
         executive_summary += f"""
 ### Production Readiness
-{'🟢 **READY FOR PRODUCTION**' if health_score >= 90 and summary['failed'] == 0 else '🔴 **NOT READY FOR PRODUCTION**'}
+{
+    "🟢 **READY FOR PRODUCTION**"
+    if health_score >= 90 and summary["failed"] == 0
+    else "🔴 **NOT READY FOR PRODUCTION**"
+}
 
-*This summary provides a high-level overview. See detailed reports for technical analysis.*
+*This summary provides a high-level overview. See detailed reports for "
+"technical analysis.*
 """
 
         return executive_summary
@@ -167,23 +185,37 @@ class TestReportGenerator:
 - **Current:** {success_rates[-1]:.1%}
 - **Previous:** {success_rates[-2]:.1%}
 - **Change:** {(success_rates[-1] - success_rates[-2]) * 100:+.1f} percentage points
-- **Trend:** {'📈 Improving' if success_rates[-1] > success_rates[-2] else '📉 Declining' if success_rates[-1] < success_rates[-2] else '📊 Stable'}
+- **Trend:** {
+    "📈 Improving" if success_rates[-1] > success_rates[-2]
+    else "📉 Declining" if success_rates[-1] < success_rates[-2]
+    else "📊 Stable"
+}
 
 ### Coverage Trend
 - **Current:** {coverages[-1]:.1f}%
 - **Previous:** {coverages[-2]:.1f}%
 - **Change:** {coverages[-1] - coverages[-2]:+.1f} percentage points
-- **Trend:** {'📈 Improving' if coverages[-1] > coverages[-2] else '📉 Declining' if coverages[-1] < coverages[-2] else '📊 Stable'}
+- **Trend:** {
+    "📈 Improving" if coverages[-1] > coverages[-2]
+    else "📉 Declining" if coverages[-1] < coverages[-2]
+    else "📊 Stable"
+}
 
 ### Performance Trend
 - **Current Duration:** {durations[-1]:.1f}s
 - **Previous Duration:** {durations[-2]:.1f}s
 - **Change:** {durations[-1] - durations[-2]:+.1f}s
-- **Trend:** {'📈 Slower' if durations[-1] > durations[-2] else '📉 Faster' if durations[-1] < durations[-2] else '📊 Stable'}
+- **Trend:** {
+    "📈 Slower" if durations[-1] > durations[-2]
+    else "📉 Faster" if durations[-1] < durations[-2]
+    else "📊 Stable"
+}
 
 ## Statistical Summary
 - **Average Success Rate:** {statistics.mean(success_rates):.1%}
-- **Success Rate Std Dev:** {statistics.stdev(success_rates) if len(success_rates) > 1 else 0:.3f}
+- **Success Rate Std Dev:** {
+    statistics.stdev(success_rates) if len(success_rates) > 1 else 0:.3f
+}
 - **Average Coverage:** {statistics.mean(coverages):.1f}%
 - **Coverage Std Dev:** {statistics.stdev(coverages) if len(coverages) > 1 else 0:.1f}%
 """
@@ -211,11 +243,11 @@ class TestReportGenerator:
 
         for suite in performance_suites:
             performance_report += f"""
-### {suite['suite_name']}
-- **Tests Executed:** {suite['total_tests']}
-- **Success Rate:** {(suite['passed'] / max(suite['total_tests'], 1)):.1%}
-- **Execution Time:** {suite['duration']:.2f}s
-- **Average Time per Test:** {suite['duration'] / max(suite['total_tests'], 1):.3f}s
+### {suite["suite_name"]}
+- **Tests Executed:** {suite["total_tests"]}
+- **Success Rate:** {(suite["passed"] / max(suite["total_tests"], 1)):.1%}
+- **Execution Time:** {suite["duration"]:.2f}s
+- **Average Time per Test:** {suite["duration"] / max(suite["total_tests"], 1):.3f}s
 
 """
 
@@ -230,10 +262,16 @@ class TestReportGenerator:
 """
 
         if total_perf_duration > 300:  # 5 minutes
-            performance_report += "- ⚠️ Performance tests are taking longer than 5 minutes - consider optimization\n"
+            performance_report += (
+                "- ⚠️ Performance tests are taking longer than 5 minutes - "
+                "consider optimization\n"
+            )
 
         if len(performance_suites) < 1:
-            performance_report += "- ⚠️ Limited performance test coverage - consider adding more performance tests\n"
+            performance_report += (
+                "- ⚠️ Limited performance test coverage - "
+                "consider adding more performance tests\n"
+            )
 
         return performance_report
 
@@ -253,10 +291,10 @@ class TestReportGenerator:
 # Code Coverage Analysis
 
 ## Overall Coverage
-- **Total Coverage:** {totals.get('percent_covered', 0):.1f}%
-- **Lines Covered:** {totals.get('covered_lines', 0)}
-- **Total Lines:** {totals.get('num_statements', 0)}
-- **Missing Lines:** {totals.get('missing_lines', 0)}
+- **Total Coverage:** {totals.get("percent_covered", 0):.1f}%
+- **Lines Covered:** {totals.get("covered_lines", 0)}
+- **Total Lines:** {totals.get("num_statements", 0)}
+- **Missing Lines:** {totals.get("missing_lines", 0)}
 
 ## File-by-File Analysis
 
@@ -424,7 +462,7 @@ class TestReportGenerator:
         print(f"📋 Executive summary: executive_summary_{timestamp}.md")
 
 
-def main():
+def main() -> int:
     """CLI for report generation."""
     import argparse
 
@@ -459,4 +497,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()

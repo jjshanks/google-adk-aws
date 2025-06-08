@@ -70,8 +70,7 @@ async def demonstrate_s3_artifacts():
             '{"theme": "dark", "language": "en", "notifications": true}'
         ),
         "analysis.csv": (
-            "date,value,category\n2024-01-01,100,A\n2024-01-02,150,B\n"
-            "2024-01-03,200,A"
+            "date,value,category\n2024-01-01,100,A\n2024-01-02,150,B\n2024-01-03,200,A"
         ),
         "notes.md": (
             "# Meeting Notes\n\n- Discussed project timeline\n"

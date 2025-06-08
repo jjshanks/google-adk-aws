@@ -8,10 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.automation.test_runner import ComprehensiveTestRunner
+
 # Add project root to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from tests.automation.test_runner import ComprehensiveTestRunner
 
 
 def run_quick_tests() -> int:
@@ -222,7 +222,7 @@ def run_lint_and_format() -> int:
     return exit_code
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Test orchestration for S3ArtifactService"
@@ -279,7 +279,7 @@ def main():
 
         results = {}
         for name, func in commands:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"Running {name}")
             print("=" * 60)
 
@@ -296,7 +296,7 @@ def main():
                 print(f"✅ {name} passed")
 
         # Final summary
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("FINAL RESULTS")
         print("=" * 60)
         for name, result in results.items():

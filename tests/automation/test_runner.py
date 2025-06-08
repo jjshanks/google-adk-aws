@@ -534,82 +534,86 @@ class ComprehensiveTestRunner:
     <div class="container">
         <div class="header">
             <h1>S3ArtifactService Comprehensive Test Report</h1>
-            <p>Generated on {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p>Generated on {time.strftime("%Y-%m-%d %H:%M:%S")}</p>
         </div>
 
         <div class="summary">
             <div class="metric">
                 <div class="metric-value {
-                    'success' if summary['success_rate'] >= 0.95
-                    else 'warning' if summary['success_rate'] >= 0.8
-                    else 'danger'
-                }">{summary['success_rate']:.1%}</div>
+            "success"
+            if summary["success_rate"] >= 0.95
+            else "warning"
+            if summary["success_rate"] >= 0.8
+            else "danger"
+        }">{summary["success_rate"]:.1%}</div>
                 <div class="metric-label">Success Rate</div>
             </div>
             <div class="metric">
-                <div class="metric-value">{summary['total_tests']}</div>
+                <div class="metric-value">{summary["total_tests"]}</div>
                 <div class="metric-label">Total Tests</div>
             </div>
             <div class="metric">
-                <div class="metric-value success">{summary['passed']}</div>
+                <div class="metric-value success">{summary["passed"]}</div>
                 <div class="metric-label">Passed</div>
             </div>
             <div class="metric">
                 <div class="metric-value {
-                    'danger' if summary['failed'] > 0 else 'success'
-                }">{summary['failed']}</div>
+            "danger" if summary["failed"] > 0 else "success"
+        }">{summary["failed"]}</div>
                 <div class="metric-label">Failed</div>
             </div>
             <div class="metric">
-                <div class="metric-value">{summary['skipped']}</div>
+                <div class="metric-value">{summary["skipped"]}</div>
                 <div class="metric-label">Skipped</div>
             </div>
             <div class="metric">
                 <div class="metric-value {
-                    'success' if summary['average_coverage'] >= 95
-                    else 'warning' if summary['average_coverage'] >= 80
-                    else 'danger'
-                }">{summary['average_coverage']:.1f}%</div>
+            "success"
+            if summary["average_coverage"] >= 95
+            else "warning"
+            if summary["average_coverage"] >= 80
+            else "danger"
+        }">{summary["average_coverage"]:.1f}%</div>
                 <div class="metric-label">Coverage</div>
             </div>
             <div class="metric">
-                <div class="metric-value">{summary['overall_duration']:.1f}s</div>
+                <div class="metric-value">{summary["overall_duration"]:.1f}s</div>
                 <div class="metric-label">Duration</div>
             </div>
             <div class="metric">
-                <div class="metric-value">{summary['error_scenarios_tested']}</div>
+                <div class="metric-value">{summary["error_scenarios_tested"]}</div>
                 <div class="metric-label">Error Scenarios</div>
             </div>
         </div>
 
         <div class="quality-indicators">
             <div class="indicator {
-                'pass' if quality_metrics['comprehensive_coverage'] else 'fail'
-            }">
+            "pass" if quality_metrics["comprehensive_coverage"] else "fail"
+        }">
                 {
-                    '✓' if quality_metrics['comprehensive_coverage'] else '✗'
-                } Comprehensive Coverage (95%+)
+            "✓" if quality_metrics["comprehensive_coverage"] else "✗"
+        } Comprehensive Coverage (95%+)
             </div>
             <div class="indicator {
-                'pass' if quality_metrics['error_handling_coverage'] else 'fail'
-            }">
+            "pass" if quality_metrics["error_handling_coverage"] else "fail"
+        }">
                 {
-                    '✓' if quality_metrics['error_handling_coverage'] else '✗'
-                } Error Handling Coverage (50+ scenarios)
+            "✓" if quality_metrics["error_handling_coverage"] else "✗"
+        } Error Handling Coverage (50+ scenarios)
             </div>
             <div class="indicator {
-                'pass' if quality_metrics['edge_case_coverage'] else 'fail'
-            }">
+            "pass" if quality_metrics["edge_case_coverage"] else "fail"
+        }">
                 {
-                    '✓' if quality_metrics['edge_case_coverage'] else '✗'
-                } Edge Case Coverage (30+ cases)
+            "✓" if quality_metrics["edge_case_coverage"] else "✗"
+        } Edge Case Coverage (30+ cases)
             </div>
             <div class="indicator {
-                'pass' if quality_metrics['performance_validated'] else 'fail'
-            }">
+            "pass" if quality_metrics["performance_validated"] else "fail"
+        }">
                 {
-                    '✓' if quality_metrics['performance_validated'] else '✗'
-                } Performance Validated
+            "✓" if quality_metrics["performance_validated"] else "✗"
+        } Performance Validated
             </div>
         </div>
 
@@ -628,15 +632,15 @@ class ComprehensiveTestRunner:
             html += f"""
             <div class="suite">
                 <div class="suite-header {status_class}">
-                    {result['suite_name']}
+                    {result["suite_name"]}
                 </div>
                 <div class="suite-body">
-                    <div>Total: {result['total_tests']}</div>
-                    <div>Passed: {result['passed']}</div>
-                    <div>Failed: {result['failed']}</div>
-                    <div>Skipped: {result['skipped']}</div>
-                    <div>Duration: {result['duration']:.2f}s</div>
-                    <div>Coverage: {result['coverage_percentage']:.1f}%</div>
+                    <div>Total: {result["total_tests"]}</div>
+                    <div>Passed: {result["passed"]}</div>
+                    <div>Failed: {result["failed"]}</div>
+                    <div>Skipped: {result["skipped"]}</div>
+                    <div>Duration: {result["duration"]:.2f}s</div>
+                    <div>Coverage: {result["coverage_percentage"]:.1f}%</div>
                 </div>
             </div>
 """

@@ -500,8 +500,7 @@ async def main():
                 "(This is a simplified demo)"
             )
             print(
-                "       Use the Google ADK runners for full conversation "
-                "capabilities."
+                "       Use the Google ADK runners for full conversation capabilities."
             )
             print()
 

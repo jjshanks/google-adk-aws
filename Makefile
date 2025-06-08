@@ -73,13 +73,11 @@ lint: ## Check code style with ruff
 lint-fix: ## Fix code style issues with ruff
 	ruff check --fix src tests examples
 
-format: ## Format code with black and isort
-	black src tests examples
-	isort src tests examples
+format: ## Format code with ruff
+	ruff format src tests examples
 
 format-check: ## Check if code formatting is correct
-	black --check src tests examples
-	isort --check-only src tests examples
+	ruff format --check src tests examples
 
 typecheck: ## Run static type checking with mypy
 	@echo "Running mypy type checking..."

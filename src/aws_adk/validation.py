@@ -300,7 +300,7 @@ class InputValidator:
 
             # Sanitize the name part
             sanitized = re.sub(r"[^a-zA-Z0-9._:-]", "_", name_part)
-            return f"{prefix}{sanitized[:self.MAX_SANITIZED_FILENAME_LENGTH]}"
+            return f"{prefix}{sanitized[: self.MAX_SANITIZED_FILENAME_LENGTH]}"
 
         return (
             sanitize_id(app_name),
