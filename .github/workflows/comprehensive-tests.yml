@@ -45,7 +45,7 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}
 
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-python-${{ matrix.python-version }}
@@ -87,7 +87,7 @@ jobs:
         python -m pytest tests/unit/test_performance_comprehensive.py -v --benchmark-only
 
     - name: Upload performance results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: performance-results
         path: .benchmarks/
@@ -118,7 +118,7 @@ jobs:
       continue-on-error: true
 
     - name: Upload security reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: security-reports
@@ -172,7 +172,7 @@ jobs:
         S3_ENDPOINT_URL: http://localhost:4566
 
     - name: Upload integration test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: integration-test-results
@@ -187,7 +187,7 @@ jobs:
 
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Evaluate quality gate
       run: |
