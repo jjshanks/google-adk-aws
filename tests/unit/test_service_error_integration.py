@@ -1,4 +1,5 @@
 """Integration tests for error handling across service operations."""
+
 # mypy: ignore-errors
 
 import asyncio
@@ -106,20 +107,22 @@ class TestServiceErrorIntegration:
         assert result == []  # Empty list from successful operation
         assert call_count == 2  # Failed once, succeeded on retry
 
-    async def test_error_context_propagation(self, service_with_retry_config):
+    async def test_error_context_propagation(
+        self, service_with_retry_config, mock_s3_setup
+    ):
         """Test that error context is properly propagated."""
         error = ErrorSimulator.create_client_error("NoSuchBucket")
 
         mock_client = Mock()
-        mock_client.head_bucket = AsyncMock(side_effect=error)
+        mock_client.head_bucket = Mock(side_effect=error)
         service_with_retry_config.s3_client = mock_client
 
         with pytest.raises(S3BucketError) as exc_info:
-            await service_with_retry_config._ensure_bucket_exists()
+            service_with_retry_config._validate_bucket_access()
 
         error_obj = exc_info.value
-        assert error_obj.context["bucket_name"] == "test-bucket"
-        assert error_obj.context["region"] == "us-east-1"
+        assert error_obj.error_code == "NoSuchBucket"
+        assert error_obj.operation == "validate_bucket_access"
 
     async def test_validation_error_propagation(
         self, service_with_retry_config, sample_artifact

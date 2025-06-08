@@ -1,4 +1,5 @@
 """Comprehensive performance testing and benchmarking for S3ArtifactService."""
+
 # mypy: ignore-errors
 
 import os

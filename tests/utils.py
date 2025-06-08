@@ -274,11 +274,13 @@ class ValidationTester:
 
 
 def create_test_service(
-    mock_s3_client: Optional[Mock] = None, **service_kwargs
+    mock_s3_client: Optional[Mock] = None,
+    bucket_name: str = "test-artifacts-bucket",
+    **service_kwargs,
 ) -> S3ArtifactService:
     """Create S3ArtifactService instance for testing."""
     default_kwargs = {
-        "bucket_name": "test-bucket",
+        "bucket_name": bucket_name,
         "region_name": "us-east-1",
         "enable_validation": True,
         "enable_security_checks": True,

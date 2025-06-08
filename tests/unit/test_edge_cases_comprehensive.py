@@ -1,4 +1,5 @@
 """Comprehensive edge case testing for S3ArtifactService."""
+
 # mypy: ignore-errors
 
 import asyncio
@@ -542,7 +543,7 @@ class TestDataIntegrityEdgeCases:
             "Москва",  # Cyrillic
             "العربية",  # Arabic
             "🔥💻🚀",  # More emoji
-            "\u200B\u200C\u200D",  # Zero-width characters
+            "\u200b\u200c\u200d",  # Zero-width characters
         ]
 
         for i, text in enumerate(unicode_test_cases):
